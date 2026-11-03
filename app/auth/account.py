@@ -39,6 +39,7 @@ from app.config import Settings
 from app.db.sqlite import begin_immediate
 from app.db.types import utc_now
 from app.errors import AppError
+from app.modules.audit.service import record_audit
 from app.modules.users.models import User, UserStatus
 
 
@@ -164,6 +165,9 @@ def reset_password(
     new_password: str,
     *,
     now: datetime | None = None,
+    actor_user_id: str | None = None,
+    request_id: str | None = None,
+    source: str = "API",
 ) -> User:
     validate_password(new_password, field="new_password")
     reset_at = now or utc_now()
@@ -185,6 +189,17 @@ def reset_password(
 
         revoke_all_sessions(session, user.id, reset_at)
         revoke_all_api_keys(session, user.id, REVOKE_REASON_PASSWORD_RESET, reset_at)
+        record_audit(
+            session,
+            actor_user_id=actor_user_id,
+            action="PASSWORD_RESET",
+            entity_type="user",
+            entity_id=user.id,
+            after={"id": user.id, "force_password_change": True, "version": user.version},
+            request_id=request_id,
+            source=source,
+            now=reset_at,
+        )
         session.flush()
         session.expunge(user)
         return user

@@ -6,6 +6,27 @@ Alembic 通过本模块取得包含全部模型的 ``Base.metadata``；后续阶
 
 from app.auth.models import ApiKey, AuthSession
 from app.db.base import Base
+from app.modules.audit.models import AuditLog
+from app.modules.categories.models import Category
+from app.modules.departments.models import Department
+from app.modules.manufacturers.models import Manufacturer
+from app.modules.masterdata.base import CodeCounter
+from app.modules.materials.models import Material
+from app.modules.projects.models import Project
 from app.modules.users.models import User
+from app.modules.warehouses.models import Warehouse
 
-__all__ = ["ApiKey", "AuthSession", "Base", "User"]
+__all__ = [
+    "ApiKey",
+    "AuditLog",
+    "AuthSession",
+    "Base",
+    "Category",
+    "CodeCounter",
+    "Department",
+    "Manufacturer",
+    "Material",
+    "Project",
+    "User",
+    "Warehouse",
+]

@@ -20,6 +20,7 @@ from app.auth.models import API_KEY_NAME_MAX_LENGTH, ApiKey
 from app.db.sqlite import begin_immediate
 from app.db.types import utc_now
 from app.errors import AppError
+from app.modules.audit.service import record_audit
 from app.modules.users.models import User, UserStatus
 
 API_KEY_PREFIX = "osk_"
@@ -67,6 +68,8 @@ def create_api_key(
     name: str,
     *,
     now: datetime | None = None,
+    request_id: str | None = None,
+    source: str = "API",
 ) -> tuple[ApiKey, str]:
     """在写事务内创建 Key；完整明文只返回给调用方一次。"""
     normalized_name = validate_api_key_name(name)
@@ -103,6 +106,22 @@ def create_api_key(
         )
         session.add(row)
         session.flush()
+        record_audit(
+            session,
+            actor_user_id=user_id,
+            action="API_KEY_CREATED",
+            entity_type="api_key",
+            entity_id=row.id,
+            after={
+                "id": row.id,
+                "name": row.name,
+                "key_suffix": row.key_suffix,
+                "revoked_at": None,
+            },
+            request_id=request_id,
+            source=source,
+            now=created_at,
+        )
         session.expunge(row)
         return row, raw_key
 
@@ -137,6 +156,8 @@ def revoke_api_key(
     key_id: str,
     *,
     now: datetime | None = None,
+    request_id: str | None = None,
+    source: str = "API",
 ) -> ApiKey:
     """吊销本人 Key；已吊销时幂等返回当前记录。"""
     revoked_at = now or utc_now()
@@ -152,6 +173,24 @@ def revoke_api_key(
         if row.revoked_at is None:
             row.revoked_at = revoked_at
             row.revoke_reason = REVOKE_REASON_USER
+            session.flush()
+            record_audit(
+                session,
+                actor_user_id=user_id,
+                action="API_KEY_REVOKED",
+                entity_type="api_key",
+                entity_id=row.id,
+                after={
+                    "id": row.id,
+                    "name": row.name,
+                    "key_suffix": row.key_suffix,
+                    "revoked_at": row.revoked_at.isoformat(),
+                    "revoke_reason": row.revoke_reason,
+                },
+                request_id=request_id,
+                source=source,
+                now=revoked_at,
+            )
         session.flush()
         session.expunge(row)
         return row

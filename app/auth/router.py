@@ -33,7 +33,9 @@ from app.auth.sessions import clear_session_cookie, revoke_session, set_session_
 from app.db.database import get_session
 from app.db.types import utc_now
 from app.errors import AppError
+from app.modules.audit.service import record_audit
 from app.modules.users.models import User
+from app.request_context import get_request_id
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 api_key_router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
@@ -44,6 +46,7 @@ def login(
     payload: LoginRequest,
     request: Request,
     response: Response,
+    session: Annotated[Session, Depends(get_session)],
 ) -> IdentityResponse:
     settings = request.app.state.settings
     limiter = request.app.state.runtime.login_rate_limiter
@@ -74,6 +77,17 @@ def login(
         raise
 
     limiter.reset(ip, login_name)
+    record_audit(
+        session,
+        actor_user_id=user.id,
+        action="LOGIN_SUCCEEDED",
+        entity_type="user",
+        entity_id=user.id,
+        after={"id": user.id, "login_name": user.login_name, "role": user.role},
+        request_id=get_request_id(),
+        source="API",
+    )
+    session.commit()
     set_session_cookie(response, credentials.raw_token)
     return _identity(user, credentials.csrf_token)
 
@@ -146,6 +160,7 @@ def post_api_key(
         request.app.state.runtime.session_factory,
         auth.user.id,
         payload.name,
+        request_id=get_request_id(),
     )
     metadata = ApiKeyMetadata.model_validate(row)
     return ApiKeyCreated(**metadata.model_dump(), key=raw_key)
@@ -161,6 +176,7 @@ def revoke_own_api_key(
         request.app.state.runtime.session_factory,
         auth.user.id,
         str(key_id),
+        request_id=get_request_id(),
     )
     return ApiKeyMetadata.model_validate(row)
 

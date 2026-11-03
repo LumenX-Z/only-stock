@@ -21,6 +21,9 @@ from app.error_handlers import register_error_handlers
 from app.health import router as health_router
 from app.logging import configure_logging
 from app.middleware import RequestContextMiddleware
+from app.modules.audit.router import router as audit_router
+from app.modules.masterdata.router import router as masterdata_router
+from app.modules.users.router import router as users_router
 from app.modules.users.service import bootstrap_initial_admin
 from app.runtime import Runtime, build_runtime
 
@@ -56,6 +59,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(api_key_router)
+    app.include_router(users_router)
+    app.include_router(masterdata_router)
+    app.include_router(audit_router)
     return app
 
 

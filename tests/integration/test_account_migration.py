@@ -106,7 +106,7 @@ def test_upgrade_is_idempotent(settings: Settings, migrated_engine: Engine) -> N
         versions = (
             connection.exec_driver_sql("SELECT version_num FROM schema_migrations").scalars().all()
         )
-    assert versions == ["0001_accounts"]
+    assert versions == ["0002_master_data"]
 
 
 def _user(login_name: str, now: datetime) -> User:

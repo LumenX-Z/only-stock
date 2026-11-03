@@ -263,67 +263,67 @@ uv run pytest tests/unit tests/integration tests/security
 
 完成固定角色权限、用户管理、六类基础资料、自动编码、名称唯一、分类层级、数量转换和审计，为单据业务提供稳定主数据。
 
-- [ ] **T3.1 权限模型与服务端授权**
+- [x] **T3.1 权限模型与服务端授权**
   - 依据：[03-角色、权限与账户生命周期.md](docs/03-角色、权限与账户生命周期.md) 4.1、4.2；[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md) 8.2。
   - 产出：`COMPANY_ADMIN` / `OPERATOR` 固定角色；`CA`、`OP`、`CU` 权限依赖；每个写接口的服务端授权。
   - 完成：操作员访问管理接口返回 403；页面按钮隐藏不作为权限边界；每次请求重新校验账户状态。
 
-- [ ] **T3.2 用户生命周期与最后管理员保护**
+- [x] **T3.2 用户生命周期与最后管理员保护**
   - 依据：[03-角色、权限与账户生命周期.md](docs/03-角色、权限与账户生命周期.md) 4.3。
   - 产出：创建用户、改显示名/角色、禁用、重置密码；至少保留一个启用公司管理员。
   - 完成：最后一名管理员不能停用或降级；并发禁用/降级在 `BEGIN IMMEDIATE` 内重新统计并回滚；禁用立即撤销会话/Key。
 
-- [ ] **T3.3 用户管理接口**
+- [x] **T3.3 用户管理接口**
   - 依据：[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md) 8.4 用户部分。
   - 产出：`GET /users`、`POST /users`、`PATCH /users/{id}`、禁用、重置密码接口。
   - 完成：仅 CA；分页、版本/最后管理员保护、错误码和审计符合文档。
 
-- [ ] **T3.4 六类实体统一 code 生成**
+- [x] **T3.4 六类实体统一 code 生成**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.2。
   - 产出：`code_counters`；前缀 `CK/BM/FL/WZ/XM/CJ`；固定 5 位补零；创建事务内生成。
   - 完成：编码唯一、不可修改、停用/删除不复用；序号达 99999 失败；并发创建不重复；失败与计数器整体回滚。
 
-- [ ] **T3.5 仓库、部门、项目、厂家**
+- [x] **T3.5 仓库、部门、项目、厂家**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.2、6.7；[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md) 8.4。
   - 产出：四类主数据的创建、列表、删除、停用、启用服务；名称规范化唯一。
   - 完成：创建后不可修改；已引用只能停用；名称重复 409 `NAME_CONFLICT`；停用记录仍占名。
 
-- [ ] **T3.6 分类层级**
+- [x] **T3.6 分类层级**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.4、6.7。
   - 产出：一级/二级分类树；父级约束；一级/二级名称唯一范围；分类删除与停用条件。
   - 完成：禁止第三级；有子分类/物资时不能删除；存在未停用子分类或物资时不能停用；父级未启用不能启用。
 
-- [ ] **T3.7 物资**
+- [x] **T3.7 物资**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.4、6.7。
   - 产出：物资创建（一级或二级分类、名称、单位、数量类型）、列表、删除/停用/启用。
   - 完成：物资名称在直接所属分类内唯一；`INTEGER/DECIMAL` 数量类型生效；创建后不可修改；停用只影响入库。
 
-- [ ] **T3.8 六类名称规范化与唯一索引**
+- [x] **T3.8 六类名称规范化与唯一索引**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.7、6.8。
   - 产出：去首尾空白后精确比较；服务层查重 + 数据库唯一索引；分类/物资层级唯一索引。
   - 完成：并发同名创建只有一个成功；停用记录参与查重；不折叠大小写、不删除内部空白。
 
-- [ ] **T3.9 停用、启用与删除规则**
+- [x] **T3.9 停用、启用与删除规则**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.7；[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.6、7.6.1。
   - 产出：通用停用/启用服务；分类自底向上停用；启用上级校验；删除引用检查。
   - 完成：停用/启用只改状态并写审计，不改历史单据/快照/库存；`PARENT_INACTIVE`、`CATEGORY_HAS_ACTIVE_*` 等错误按文档返回。
 
-- [ ] **T3.10 数量转换与校验**
+- [x] **T3.10 数量转换与校验**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.6。
   - 产出：Decimal → `quantity_milli` 转换；最多三位小数；整数物资校验；`MAX_BALANCE_MILLI` 常量。
   - 完成：`1.25` 存为 `1250`；拒绝浮点、四位小数、科学计数法；余额上限不溢出。
 
-- [ ] **T3.11 审计日志**
+- [x] **T3.11 审计日志**
   - 依据：[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.6。
   - 产出：只追加审计服务；记录操作者、时间、请求 ID、对象、动作、前后状态、来源 `WEB/API/MCP`。
   - 完成：登录、用户、Key、资料变更、停用/启用、提交、软删除、备份/恢复均写审计；不记录敏感凭证。
 
-- [ ] **T3.12 基础资料与用户管理 API 收口**
+- [x] **T3.12 基础资料与用户管理 API 收口**
   - 依据：[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md) 8.4。
   - 产出：六类资料的 GET/POST/DELETE/停用/启用接口；审计查询；CA 权限；分页和错误结构。
   - 完成：请求体不含 `code`，传 `code` 返回 422；创建返回系统生成 `code`；OpenAPI 与实现一致。
 
-- [ ] **T3.13 基础资料专项测试**
+- [x] **T3.13 基础资料专项测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.2；[15-测试方案.md](docs/15-测试方案.md) 12.2。
   - 产出：编码并发生成、名称并发重名、分类层级/删除/停用、物资分类、数量精度、停用启用、权限测试。
   - 完成：`uv run pytest tests/unit tests/integration tests/concurrency` 相关用例通过。
@@ -733,3 +733,17 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-03 | T2.7 | `uv run pytest tests/integration/test_auth_api.py tests/integration/test_api_keys_api.py -q`；检查 `/openapi.json` | 通过：24 passed；`/auth/login`、`/auth/logout`、`/auth/me`、`/auth/change-password`、`/api/v1/api-keys`、`/api/v1/api-keys/{key_id}/revoke` 与 OpenAPI 一致；写接口均校验 CSRF，API Key 明文仅在创建成功响应出现一次 | 依据 `docs/10` 8.3（已消除 `/api-keys` 与 `/api/v1/api-keys` 矛盾）、`docs/09` 8.1 |
 | 2026-11-03 | T2.8 | `uv run pytest tests/security -q`；`uv run pytest tests/unit/test_passwords.py tests/unit/test_login_names.py tests/unit/test_db_types.py tests/unit/test_api_key_format.py -q` | 通过：16 passed；18 passed；覆盖登录限流、会话超时、CSRF、Cookie 属性、密码哈希、Key 单次显示/哈希存储、禁用与吊销、日志脱敏；数据库文件与日志均无明文密码、会话 ID、CSRF Token、完整 Key 或 Authorization 头 | 依据 `docs/16` 13.1、13.5，`docs/15` 12.1 |
 | 2026-11-03 | P2 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run alembic upgrade head`；`uv run pytest tests/unit tests/integration tests/security` | 通过：Ruff 0 告警、91 个文件格式一致；迁移到 `0001_accounts (head)`；175 passed（unit+integration+security） | 依据 `TASKS.md` P2 阶段门禁；另执行 `uv run pytest -q` 全量 175 passed；`uv run alembic check` 无模型漂移 |
+| 2026-11-03 | T3.1 | `uv run pytest tests/integration/test_masterdata_api.py::test_operator_can_read_but_cannot_manage tests/integration/test_users_api.py::test_operator_cannot_access_user_management tests/integration/test_audit_api.py::test_audit_api_rejects_operator -q` | 通过：3 passed；操作员查询基础资料 200，创建/删除/停用基础资料、用户管理与审计查询均 403 `FORBIDDEN`；每个请求重新加载账户状态 | 依据 `docs/03` 4.1、4.2，`docs/09` 8.2；`app/auth/permissions.py` 统一服务端授权，页面隐藏不作为权限边界 |
+| 2026-11-03 | T3.2 | `uv run pytest tests/integration/test_users_api.py -q`（13 passed）；`uv run pytest tests/concurrency/test_last_admin.py tests/concurrency/test_name_conflicts.py -q`（9 passed） | 通过：创建/改显示名/改角色/禁用/重置可用；最后一名启用管理员不能降级或禁用，两名管理员并发互降/互禁时恰好一个成功且至少保留一名启用管理员；角色变化和禁用撤销目标会话与全部 API Key | 依据 `docs/03` 4.3；检查、统计与写入在 `BEGIN IMMEDIATE` 内完成并写审计 |
+| 2026-11-03 | T3.3 | `uv run pytest tests/integration/test_users_api.py -q` | 通过：13 passed；`GET/POST /api/v1/users`、`PATCH /users/{id}`、`/disable`、`/reset-password` 仅 CA 可用；分页、筛选、`version` 冲突、最后管理员保护、响应不回显密码；OpenAPI 路径一致 | 依据 `docs/10` 8.4；用户创建、禁用、重置写审计，审计与业务同事务 |
+| 2026-11-03 | T3.4 | `uv run pytest tests/unit/test_codes.py tests/concurrency/test_code_generation.py -q`；`uv run pytest tests/integration/test_account_migration.py::test_models_and_migration_are_in_sync -q` | 通过：11 passed；六类前缀 `CK/BM/FL/WZ/XM/CJ` 与固定 5 位补零；并发创建编码唯一；序号 99999 后失败且不回绕；插入失败时计数器整体回滚；停用/删除后编码不复用；`alembic check` 无模型漂移 | 依据 `docs/05` 6.2；`code_counters` 仅在 `BEGIN IMMEDIATE` 写事务内更新 |
+| 2026-11-03 | T3.5 | `uv run pytest tests/integration/test_masterdata_api.py -q` | 通过：23 passed；仓库（含位置）、部门、项目、厂家创建返回系统编码，列表默认仅启用、可切换停用；名称去首尾空白后唯一且区分大小写；删除/停用/启用按引用规则执行；创建后无修改接口 | 依据 `docs/05` 6.2、6.7，`docs/10` 8.4 |
+| 2026-11-03 | T3.6 | `uv run pytest tests/integration/test_masterdata_api.py -q` | 通过：23 passed；分类严格两级，父分类必须为一级且启用；一级名称全局唯一、二级名称在父级内唯一；树查询返回嵌套 `children`；存在未停用子分类/物资时停用返回 409 并列出阻碍项；删除受子分类、物资与引用约束 | 依据 `docs/05` 6.4、6.7、6.8，`docs/06` 7.6.1 |
+| 2026-11-03 | T3.7 | `uv run pytest tests/integration/test_masterdata_api.py -q` | 通过：23 passed；物资必须挂一级或二级且启用分类，名称在直接所属分类内唯一，单位必填，`INTEGER/DECIMAL` 校验生效；停用/启用与分类上级校验生效；创建后不可修改 | 依据 `docs/05` 6.4、6.6、6.7 |
+| 2026-11-03 | T3.8 | `uv run pytest tests/unit/test_names.py -q`（9 passed）；`uv run pytest tests/concurrency/test_name_conflicts.py tests/concurrency/test_code_generation.py -q`（9 passed） | 通过：仅去除首尾空白，保留大小写与内部空白；停用记录仍占名；仓库/分类/物资并发同名仅一个成功；服务层查重与部分唯一索引/复合唯一索引共同生效 | 依据 `docs/05` 6.4、6.7、6.8；并发对手竞争由 `BEGIN IMMEDIATE` 串行化并以唯一索引兜底 |
+| 2026-11-03 | T3.9 | `uv run pytest tests/integration/test_masterdata_api.py -q`；`uv run pytest tests/concurrency/test_name_conflicts.py -q` | 通过：23 passed、6 passed；停用/启用只改 `is_active` 并写审计，不改历史；启用已启用记录幂等且不重复写审计；分类自底向上停用、`PARENT_INACTIVE`、`CATEGORY_HAS_ACTIVE_CHILDREN`、`CATEGORY_HAS_ACTIVE_MATERIALS` 均按文档返回；停用与新增下级资料竞争后不产生“父停子启” | 依据 `docs/05` 6.7，`docs/06` 7.6、7.6.1 |
+| 2026-11-03 | T3.10 | `uv run pytest tests/unit/test_quantity.py -q` | 通过：20 passed；`1.25` 转 `1250`、`0.001` 转 `1`；拒绝浮点、布尔、科学计数法、零/负数、四位小数与超上限；整数物资拒绝小数；`MAX_BALANCE_MILLI=9000000000000000000` 低于 SQLite 有符号 64 位上限 | 依据 `docs/05` 6.6；数量输入按字符串解析为 `Decimal`，输出固定三位小数 |
+| 2026-11-03 | T3.11 | `uv run pytest tests/integration/test_audit_api.py -q` | 通过：8 passed；系统初始化、登录、用户创建/禁用/重置、API Key 创建/吊销、六类资料创建/停用/启用/删除均写审计；记录操作者、时间、请求 ID、对象、动作、前后状态与来源；`source` 仅 `WEB/API/MCP`；数据库触发器拒绝 UPDATE/DELETE；审计不含密码、完整 Key 或哈希 | 依据 `docs/04` 5.6；MCP 来源与 `api_key_id` 字段已预留，P7 接入 |
+| 2026-11-03 | T3.12 | `uv run pytest tests/integration/test_masterdata_api.py tests/integration/test_master_data_migration.py -q` | 通过：30 passed；六类资料 GET/POST/DELETE/停用/启用与审计查询路径齐全；创建请求携带 `code` 返回 422，成功响应返回系统生成 `code`；列表分页、错误 `details.resource/items` 结构、CA/OP 权限与 OpenAPI 一致 | 依据 `docs/10` 8.4、`docs/09` 8.1；六类创建 schema 使用 `extra="forbid"` |
+| 2026-11-03 | T3.13 | `uv run pytest tests/concurrency -q` | 通过：12 passed；覆盖六类并发生成编码、编码序号耗尽、插入失败计数器回滚、并发同名仓库/分类/物资、不同层级同名允许、分类停用与新增物资/启用子类竞争、最后管理员并发保护 | 依据 `docs/16` 13.2，`docs/15` 12.1、12.2；测试使用 `tmp_path` 独立数据库与 Barrier 并发辅助 |
+| 2026-11-03 | P3 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/integration`；`uv run pytest tests/concurrency` | 通过：Ruff 0 告警、124 个文件格式一致；unit+integration 247 passed；concurrency 12 passed；另执行全量 `uv run pytest -q` 275 passed | 依据 `TASKS.md` P3 阶段门禁；迁移 `0002_master_data` 与模型通过 `alembic check`，未修改 `docs/` 产品规则 |

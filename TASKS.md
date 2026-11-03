@@ -208,42 +208,42 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 
 完成统一账户体系、初始管理员、登录会话、CSRF、密码生命周期和 API Key 凭证，使后续所有接口有可信身份。
 
-- [ ] **T2.1 账户/会话/API Key 表与首次迁移**
+- [x] **T2.1 账户/会话/API Key 表与首次迁移**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.1；[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.1、5.2。
   - 产出：`users`、`sessions`、`api_keys` 模型与首次 Alembic 迁移；UUID、UTC 时间、唯一约束、索引。
   - 完成：`uv run alembic upgrade head` 成功；外键开启；登录名规范化唯一；Key 只存哈希与末四位。
 
-- [ ] **T2.2 密码服务**
+- [x] **T2.2 密码服务**
   - 依据：[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.4；[03-角色、权限与账户生命周期.md](docs/03-角色、权限与账户生命周期.md) 4.3。
   - 产出：Argon2id 哈希/校验、密码最小长度与首次改密标记。
   - 完成：密码不明文落库、不进日志；初始密码与重置密码首次登录必须修改。
 
-- [ ] **T2.3 初始公司管理员**
+- [x] **T2.3 初始公司管理员**
   - 依据：[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.2；[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.4。
   - 产出：空库启动时按初始化变量创建首位公司管理员；非空库忽略初始化变量。
   - 完成：重复启动不重复创建；创建失败整体回滚；首次登录强制改密。
 
-- [ ] **T2.4 登录、会话与 CSRF**
+- [x] **T2.4 登录、会话与 CSRF**
   - 依据：[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.4；[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md) 8.1。
   - 产出：`POST /auth/login`、`POST /auth/logout`、`GET /auth/me` 的会话与 CSRF；Cookie 属性、8 小时空闲/24 小时绝对超时。
   - 完成：未认证 401；写请求无 CSRF 失败；Cookie 为 HttpOnly、SameSite=Lax、内网 HTTP 下不设 Secure；登录按 IP/登录名限流。
 
-- [ ] **T2.5 本人改密与管理员重置密码**
+- [x] **T2.5 本人改密与管理员重置密码**
   - 依据：[03-角色、权限与账户生命周期.md](docs/03-角色、权限与账户生命周期.md) 4.3；[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.4。
   - 产出：`POST /auth/change-password`、`POST /users/{id}/reset-password` 的核心服务。
   - 完成：本人改密撤销其他会话和全部 Key 并轮换当前会话；重置密码撤销全部会话/Key、设置强制改密、响应不回显密码。
 
-- [ ] **T2.6 API Key 生命周期**
+- [x] **T2.6 API Key 生命周期**
   - 依据：[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.5；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.1。
   - 产出：创建/列表/吊销服务；完整 Key 仅创建时返回一次；SHA-256 哈希、末四位、用途名称；每用户最多 10 把有效 Key。
   - 完成：改密、重置、角色变化、禁用时同事务撤销全部有效 Key；重复吊销幂等；不记录完整 Key。
 
-- [ ] **T2.7 认证与 API Key 接口**
+- [x] **T2.7 认证与 API Key 接口**
   - 依据：[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md) 8.3。
   - 产出：登录、登出、当前身份、改密、本人 API Key 的查询/创建/吊销接口。
   - 完成：符合路径、输入输出、权限和 CSRF 要求；Key 明文只在创建成功响应中出现一次。
 
-- [ ] **T2.8 认证安全测试**
+- [x] **T2.8 认证安全测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.1、13.5；[15-测试方案.md](docs/15-测试方案.md) 12.1。
   - 产出：登录限流、会话超时、CSRF、Cookie 属性、密码哈希、Key 单次显示、Key 哈希存储测试。
   - 完成：`uv run pytest tests/security` 相关用例通过；无明文密码/完整 Key/Authorization 日志。
@@ -724,3 +724,12 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-03 | T1.7 | `uv run pytest -q`（84 passed）；`uv run pytest tests/unit -q`（78 passed） | 通过：临时数据库、应用测试客户端、并发 Barrier 辅助可用；测试使用 `tmp_path`，未读写开发数据库或真实备份目录 | CA/OP/禁用账户与基础资料夹具依赖 `users` 及业务表，需在 T2.1、P3 建立模型后补入；本阶段完成测试基础设施与隔离 |
 | 2026-11-03 | T1.8 | `uv run ruff check .`；`uv run ruff format --check .` | 通过：0 告警，67 个文件格式一致；无 `# noqa`；规则、排除路径与格式化选项同 `docs/02` 3.5.1 | 补充 `known-first-party = ["app", "tests"]` 并同步 `docs/02` 3.5.1，避免 isort 将 `app` 误判为第三方 |
 | 2026-11-03 | P1 门禁 | `uv run ruff check .`；`uv run ruff format --check .`；`uv run python -c "from app.main import app"`；`uv run pytest tests/unit`（78 passed）；`uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`（后台）；`curl --fail --silent http://127.0.0.1:8000/health/live`；`curl --fail --silent http://127.0.0.1:8000/health/ready` | 通过：Ruff 0；应用导入成功；78 passed；live 200 `{"status":"ok"}`；ready 200 `{"status":"ready","checks":{...}}`；验证后已停止服务 | `uv 0.13.7`、`Python 3.13.15`；因 DSH 注入 `UV_PROJECT_ENVIRONMENT`，命令使用项目 `.venv` 并加 `--offline`；门禁启动创建了 `data/`、`backups/`（均被忽略），验证后已删除 |
+| 2026-11-03 | T2.1 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run alembic upgrade head`；`uv run alembic current`；`uv run alembic check`；`uv run pytest tests/integration/test_account_migration.py -q` | 通过：`0001_accounts (head)`；`No new upgrade operations detected`；8 passed；首次迁移建立 `users`、`sessions`、`api_keys`，UUID 主键、epoch 毫秒 UTC 时间、登录名/会话哈希/Key 哈希唯一索引与外键均生效；外键违规被拒绝 | 依据 `docs/05` 6.1、`docs/04` 5.1、5.2、5.4、5.5。先修正 `docs/10` 8.3 中 API Key 路径与 `docs/04` 5.5 的矛盾，统一为 `/api/v1/api-keys`；迁移与模型由 `alembic check` 校验一致 |
+| 2026-11-03 | T2.2 | `uv run pytest tests/unit/test_passwords.py -q` | 通过：5 passed；Argon2id 哈希可校验、错误哈希返回 False、密码至少 12 位、超长拒绝；错误信息不回显密码 | 依据 `docs/04` 5.4、`docs/03` 4.3；密码明文未落库、未进入日志 |
+| 2026-11-03 | T2.3 | `uv run pytest tests/integration/test_bootstrap_admin.py -q` | 通过：7 passed；空库首次启动创建首位 `COMPANY_ADMIN` 并强制改密；重复启动不重复创建；非空库忽略初始化变量；并发初始化仅一个成功；触发器注入失败时整体回滚、无半成品账户 | 依据 `docs/04` 5.2、`docs/13` 10.4；启动仅在迁移为当前 head 时执行初始化 |
+| 2026-11-03 | T2.4 | `uv run pytest tests/integration/test_auth_api.py -q`；`uv run pytest tests/unit/test_rate_limit.py -q` | 通过：17 passed、3 passed；登录/登出/当前身份、Set-Cookie 属性（HttpOnly、SameSite=Lax、无 Secure）、CSRF、8 小时空闲/24 小时绝对超时、禁用账户拒绝、登录限流 429；未知账户与错误密码响应一致 | 依据 `docs/04` 5.4、`docs/09` 8.1；会话 ID 使用 32 字节随机数，库内只存哈希；CSRF Token 由会话派生且库内只存哈希 |
+| 2026-11-03 | T2.5 | `uv run pytest tests/integration/test_auth_api.py tests/security/test_auth_security.py -q` | 通过：本人改密清除强制改密、撤销其他会话与全部 Key、轮换当前会话；旧 Cookie 失效、旧 CSRF 失效；管理员重置服务撤销全部会话/Key、设置强制改密、不回显密码 | 依据 `docs/03` 4.3、`docs/04` 5.4；重置密码接口按 P3 T3.3 提供，本阶段完成核心服务 |
+| 2026-11-03 | T2.6 | `uv run pytest tests/integration/test_api_keys_api.py tests/security/test_auth_security.py -q` | 通过：7 passed、16 passed；创建返回完整 Key 一次、列表不含明文、库内仅 SHA-256 哈希与末四位；最多 10 把有效 Key；本人隔离、重复吊销幂等；改密/重置/角色变化/禁用均在同事务撤销全部 Key | 依据 `docs/04` 5.5、`docs/05` 6.1；角色变化与禁用由 `apply_user_state_change` 在调用方 `BEGIN IMMEDIATE` 内完成，最后管理员保护留给 P3 T3.2 |
+| 2026-11-03 | T2.7 | `uv run pytest tests/integration/test_auth_api.py tests/integration/test_api_keys_api.py -q`；检查 `/openapi.json` | 通过：24 passed；`/auth/login`、`/auth/logout`、`/auth/me`、`/auth/change-password`、`/api/v1/api-keys`、`/api/v1/api-keys/{key_id}/revoke` 与 OpenAPI 一致；写接口均校验 CSRF，API Key 明文仅在创建成功响应出现一次 | 依据 `docs/10` 8.3（已消除 `/api-keys` 与 `/api/v1/api-keys` 矛盾）、`docs/09` 8.1 |
+| 2026-11-03 | T2.8 | `uv run pytest tests/security -q`；`uv run pytest tests/unit/test_passwords.py tests/unit/test_login_names.py tests/unit/test_db_types.py tests/unit/test_api_key_format.py -q` | 通过：16 passed；18 passed；覆盖登录限流、会话超时、CSRF、Cookie 属性、密码哈希、Key 单次显示/哈希存储、禁用与吊销、日志脱敏；数据库文件与日志均无明文密码、会话 ID、CSRF Token、完整 Key 或 Authorization 头 | 依据 `docs/16` 13.1、13.5，`docs/15` 12.1 |
+| 2026-11-03 | P2 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run alembic upgrade head`；`uv run pytest tests/unit tests/integration tests/security` | 通过：Ruff 0 告警、91 个文件格式一致；迁移到 `0001_accounts (head)`；175 passed（unit+integration+security） | 依据 `TASKS.md` P2 阶段门禁；另执行 `uv run pytest -q` 全量 175 passed；`uv run alembic check` 无模型漂移 |

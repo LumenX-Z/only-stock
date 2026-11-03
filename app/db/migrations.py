@@ -6,11 +6,27 @@
 
 from pathlib import Path
 
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, inspect, text
 
+from app.config import PROJECT_ROOT, Settings
+
 VERSION_TABLE = "schema_migrations"
+
+
+def alembic_config(settings: Settings) -> Config:
+    """构造指向指定数据目录的 Alembic 配置，不依赖进程环境变量。"""
+    config = Config(str(PROJECT_ROOT / "alembic.ini"))
+    config.attributes["database_url"] = settings.database_url
+    return config
+
+
+def upgrade_to_head(settings: Settings) -> None:
+    """对指定设置执行升级到单一 head；供部署脚本和测试使用。"""
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    command.upgrade(alembic_config(settings), "head")
 
 
 class MigrationChecker:

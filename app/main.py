@@ -12,12 +12,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.auth.router import api_key_router, auth_router
+from app.auth.sessions import purge_expired_sessions
 from app.config import Settings
 from app.db.sqlite import verify_sqlite_pragmas
+from app.db.types import utc_now
 from app.error_handlers import register_error_handlers
 from app.health import router as health_router
 from app.logging import configure_logging
 from app.middleware import RequestContextMiddleware
+from app.modules.users.service import bootstrap_initial_admin
 from app.runtime import Runtime, build_runtime
 
 logger = logging.getLogger(__name__)
@@ -50,12 +54,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(api_key_router)
     return app
 
 
 def _startup(runtime: Runtime) -> None:
     runtime.settings.prepare_directories()
     verify_sqlite_pragmas(runtime.engine, runtime.settings.sqlite_busy_timeout_ms)
+
+    if runtime.migration_checker.is_current(runtime.engine):
+        created_admin = bootstrap_initial_admin(runtime.session_factory, runtime.settings)
+        if created_admin is not None:
+            logger.info("initial company admin created")
+        _purge_expired_sessions(runtime)
+    else:
+        logger.warning("database migrations not current; initial admin bootstrap skipped")
 
     try:
         runtime.scheduler.start()
@@ -71,6 +85,15 @@ def _startup(runtime: Runtime) -> None:
         )
     else:
         logger.warning("startup not ready failed=%s", ",".join(result.failed))
+
+
+def _purge_expired_sessions(runtime: Runtime) -> None:
+    try:
+        with runtime.session_factory() as session:
+            purge_expired_sessions(session, utc_now())
+            session.commit()
+    except Exception:
+        logger.exception("expired session cleanup failed")
 
 
 def _shutdown(runtime: Runtime) -> None:

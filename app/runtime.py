@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth.rate_limit import LoginRateLimiter
 from app.config import PROJECT_ROOT, Settings
 from app.db.database import create_engine_from_settings, create_session_factory
 from app.db.migrations import MigrationChecker
@@ -19,6 +20,8 @@ class Runtime:
     session_factory: sessionmaker[Session]
     scheduler: BackupScheduler
     readiness: ReadinessProbe
+    migration_checker: MigrationChecker
+    login_rate_limiter: LoginRateLimiter
 
 
 def build_runtime(settings: Settings) -> Runtime:
@@ -33,4 +36,6 @@ def build_runtime(settings: Settings) -> Runtime:
         session_factory=session_factory,
         scheduler=scheduler,
         readiness=readiness,
+        migration_checker=migration_checker,
+        login_rate_limiter=LoginRateLimiter(),
     )

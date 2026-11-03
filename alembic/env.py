@@ -1,6 +1,7 @@
 """Alembic 环境。
 
-数据库 URL 统一来自 ``app.config.Settings``，版本表使用
+数据库 URL 默认来自 ``app.config.Settings``；程序化调用可通过
+``config.attributes["database_url"]`` 指定隔离数据库。版本表使用
 docs/05-数据模型与实体约束.md 6.2 指定的 ``schema_migrations``。
 """
 
@@ -8,20 +9,24 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.config import Settings
-from app.db.base import Base
 from app.db.migrations import VERSION_TABLE
+from app.db.models import Base
 
 config = context.config
-settings = Settings.from_env()
-settings.data_dir.mkdir(parents=True, exist_ok=True)
-config.set_main_option("sqlalchemy.url", settings.database_url)
+
+configured_url = config.attributes.get("database_url")
+if configured_url is None:
+    settings = Settings.from_env()
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    configured_url = settings.database_url
+config.set_main_option("sqlalchemy.url", configured_url)
 
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=configured_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},

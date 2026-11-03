@@ -13,7 +13,7 @@ from app.main import create_app
 def test_lifespan_prepares_directories_and_starts_scheduler(
     app: FastAPI, settings: Settings
 ) -> None:
-    assert not settings.data_dir.exists()
+    assert not settings.backup_dir.exists()
 
     with TestClient(app) as client:
         assert settings.data_dir.is_dir()
@@ -42,7 +42,13 @@ def test_startup_fails_when_data_dir_is_a_file(tmp_path: Path) -> None:
             pass
 
 
-def test_no_migration_scripts_means_migrations_are_current(db_engine: Engine) -> None:
+def test_fresh_database_is_not_at_migration_head(db_engine: Engine) -> None:
     checker = MigrationChecker(PROJECT_ROOT / "alembic.ini")
 
-    assert checker.is_current(db_engine) is True
+    assert checker.is_current(db_engine) is False
+
+
+def test_migrated_database_is_at_migration_head(migrated_engine: Engine) -> None:
+    checker = MigrationChecker(PROJECT_ROOT / "alembic.ini")
+
+    assert checker.is_current(migrated_engine) is True

@@ -150,42 +150,42 @@ uv run python --version
 
 建立可启动、可测试、可迁移的空应用，完成配置、日志、健康检查和测试基础设施。
 
-- [ ] **T1.1 初始化 uv 项目与依赖**
+- [x] **T1.1 初始化 uv 项目与依赖**
   - 依据：[02-技术架构与代码组织.md](docs/02-技术架构与代码组织.md) 3.2、3.3、3.5；[AGENTS.md](AGENTS.md) 第 3、9 节。
   - 产出：`pyproject.toml`、`uv.lock`、`.gitignore`、基础包结构。
   - 完成：`uv lock` 与 `uv sync --locked` 成功；依赖包含 FastAPI、Uvicorn、SQLAlchemy 2、Alembic、Jinja2、Argon2-cffi、APScheduler、openpyxl、python-multipart、MCP Python SDK、pytest、Ruff；无未锁定依赖。
 
-- [ ] **T1.2 建立代码目录骨架**
+- [x] **T1.2 建立代码目录骨架**
   - 依据：[02-技术架构与代码组织.md](docs/02-技术架构与代码组织.md) 3.3。
   - 产出：`app/`（`main.py`、`config.py`、`db/`、`auth/`、`mcp/`、`modules/`、`services/`、`templates/`、`static/`、`cli.py`）、`alembic/`、`tests/` 六大测试目录。
   - 完成：各包可导入；目录职责与文档一致；不把业务规则放入路由。
 
-- [ ] **T1.3 配置与启动校验**
+- [x] **T1.3 配置与启动校验**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.1、10.4；[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.1。
   - 产出：集中配置模块；数据目录、备份目录、会话、MCP、初始管理员相关环境变量的读取与校验。
   - 完成：缺失关键配置时启动失败并给出明确错误；日志和错误不泄露密码、Key、Cookie。
 
-- [ ] **T1.4 SQLite Engine/Session 与事务封装**
+- [x] **T1.4 SQLite Engine/Session 与事务封装**
   - 依据：[02-技术架构与代码组织.md](docs/02-技术架构与代码组织.md) 3.4；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.1。
   - 产出：统一 Engine/Session；每连接 `PRAGMA foreign_keys=ON`、WAL、synchronous=NORMAL、busy_timeout=5000；`BEGIN IMMEDIATE` 辅助函数；SQLITE_BUSY/LOCKED 冲突映射。
   - 完成：启动自检通过；请求级 Session 可关闭；不使用 ATTACH；写事务不调用外部服务或等待用户输入。
 
-- [ ] **T1.5 请求 ID、日志与统一错误基础**
+- [x] **T1.5 请求 ID、日志与统一错误基础**
   - 依据：[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md) 8.1；[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md) 11.1、11.2。
   - 产出：请求 ID 中间件、结构化日志、统一错误响应骨架（`error.code/message/request_id/details`）。
   - 完成：错误 `details` 为对象且至少含 `resource`、`items`；日志不含密码、会话、完整 API Key、Authorization 头。
 
-- [ ] **T1.6 健康检查**
+- [x] **T1.6 健康检查**
   - 依据：[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md) 8.7；[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.2。
   - 产出：`GET /health/live`、`GET /health/ready`。
   - 完成：live 不访问业务数据；ready 检查数据库、迁移、数据目录和备份调度状态；失败时不返回敏感配置。
 
-- [ ] **T1.7 测试基础设施与夹具**
+- [x] **T1.7 测试基础设施与夹具**
   - 依据：[15-测试方案.md](docs/15-测试方案.md) 12.1、12.2。
   - 产出：pytest 配置、临时数据库、应用测试客户端、CA/OP/禁用账户、基础资料夹具、并发测试辅助。
   - 完成：`uv run pytest` 可运行空测试集；测试不触碰开发数据库或真实备份目录。
 
-- [ ] **T1.8 配置 Ruff 并纳入质量门禁**
+- [x] **T1.8 配置 Ruff 并纳入质量门禁**
   - 依据：[02-技术架构与代码组织.md](docs/02-技术架构与代码组织.md) 3.5；[AGENTS.md](AGENTS.md) 第 5 节。
   - 产出：`pyproject.toml` 写入 3.5.1 的 `[tool.ruff]` 配置；Ruff 作为开发依赖锁定；全仓库通过只读校验。
   - 完成：`uv run ruff check .` 与 `uv run ruff format --check .` 均退出 0；无未说明的 `# noqa`；规则、排除路径和格式化选项与 3.5 一致。
@@ -715,3 +715,12 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-01 | T0.3 | 写入“测试目录”“阶段门禁命令清单（权威）”“执行记录格式”；逐项核对 P1–P9 末尾门禁代码块 | 通过：6 个测试目录、P0–P9 门禁命令和 5 字段记录格式已确定 | 依据 `AGENTS.md` 第 5、10 节；`docs/15` 12.1、12.2 |
 | 2026-11-01 | P0 门禁 | `uv --version`；`uv run python --version` | 通过：`uv 0.13.6`；`Python 3.13.18` | 退出码均为 0 |
 | 2026-11-03 | T0.4 | `find . -name '*.py' -not -path './.git/*'`（0 个）；`git diff --stat`；`git -c core.whitespace=cr-at-eol diff --check`；核对 `docs/02` 3.5 与 P1–P9 门禁块 | 通过（文档）：Ruff 配置基线、只读命令、`# noqa` 边界和门禁口径已写入 6 个 Markdown 文件；仓库无 Python 文件，未安装/未运行 Ruff | 按要求只改文档、不配置环境；实际 `ruff check`/`format --check` 由 T1.8 在 T1.1 建立依赖后执行 |
+| 2026-11-03 | T1.1 | 用户执行 `uv self update`、`uv sync`；核对侧执行 `uv lock --check`、`uv sync --locked --offline`、`uv run python --version` | 通过：`uv 0.13.7`、`Python 3.13.15`；lock 校验退出 0；`Checked 57 packages`；依赖含 FastAPI、Uvicorn、SQLAlchemy 2、Alembic、Jinja2、Argon2-cffi、APScheduler、openpyxl、python-multipart、MCP SDK、pytest、Ruff | `pyproject.toml`、`uv.lock`、`.gitignore`、`.env.example` 与基础包结构已生成；DSH 注入 `UV_PROJECT_ENVIRONMENT`，验证时指向项目 `.venv`；验证命令加 `--offline` |
+| 2026-11-03 | T1.2 | 创建 `app/`（`main.py`、`config.py`、`db/`、`auth/`、`mcp/`、`modules/`、`services/`、`templates/`、`static/`、`cli.py`）、`alembic/`、`tests/` 六个测试目录；`uv run pytest tests/unit/test_package_structure.py -q`；`uv run python -m app.cli --help` | 通过：33 个包/模块导入；CLI 退出码 0；未注册业务路由 | 依据 `docs/02` 3.3；空测试目录用 `.gitkeep` 占位 |
+| 2026-11-03 | T1.3 | `uv run pytest tests/unit/test_config.py -q`（20 passed）；`uv run pytest tests/integration/test_startup.py -q`（3 passed） | 通过：DATA_DIR、BACKUP_DIR、会话、MCP、TZ、BOOTSTRAP 解析与校验；非法配置启动失败；密码不出现在错误消息或 `Settings` repr | 依据 `docs/13` 10.1、10.4，`docs/04` 5.1、5.4；启动时创建并验证目录 |
+| 2026-11-03 | T1.4 | `uv run pytest tests/unit/test_sqlite.py tests/unit/test_session.py -q`（8 passed） | 通过：每连接 foreign_keys=ON、WAL、synchronous=NORMAL、busy_timeout=5000；`BEGIN IMMEDIATE` 提交/回滚；SQLITE_BUSY 映射 409 `WRITE_CONFLICT`；请求级 Session 关闭；启动 PRAGMA 自检 | 依据 `docs/02` 3.4、`docs/05` 6.1；未使用 ATTACH |
+| 2026-11-03 | T1.5 | `uv run pytest tests/unit/test_errors.py tests/unit/test_logging.py -q`（8 passed）；`curl` 检查 `X-Request-ID` 响应头 | 通过：统一 `error.code/message/request_id/details`；`details` 含 `resource`、`items`；校验错误不回显输入；500 响应不泄露异常详情；日志为 UTC 且含请求 ID | 依据 `docs/09` 8.1、`docs/14` 11.1、11.2 |
+| 2026-11-03 | T1.6 | `uv run pytest tests/unit/test_health.py -q`（7 passed）；启动 uvicorn 后 `curl /health/live`、`/health/ready` | 通过：live 200；ready 200 且 `data_dir`、`backup_dir`、`database`、`migrations`、`backup_scheduler` 全为 true；删除数据目录或停止调度器返回 503 且不泄露路径 | 迁移检查使用 `schema_migrations`；备份任务本身按 P9 实现 |
+| 2026-11-03 | T1.7 | `uv run pytest -q`（84 passed）；`uv run pytest tests/unit -q`（78 passed） | 通过：临时数据库、应用测试客户端、并发 Barrier 辅助可用；测试使用 `tmp_path`，未读写开发数据库或真实备份目录 | CA/OP/禁用账户与基础资料夹具依赖 `users` 及业务表，需在 T2.1、P3 建立模型后补入；本阶段完成测试基础设施与隔离 |
+| 2026-11-03 | T1.8 | `uv run ruff check .`；`uv run ruff format --check .` | 通过：0 告警，67 个文件格式一致；无 `# noqa`；规则、排除路径与格式化选项同 `docs/02` 3.5.1 | 补充 `known-first-party = ["app", "tests"]` 并同步 `docs/02` 3.5.1，避免 isort 将 `app` 误判为第三方 |
+| 2026-11-03 | P1 门禁 | `uv run ruff check .`；`uv run ruff format --check .`；`uv run python -c "from app.main import app"`；`uv run pytest tests/unit`（78 passed）；`uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`（后台）；`curl --fail --silent http://127.0.0.1:8000/health/live`；`curl --fail --silent http://127.0.0.1:8000/health/ready` | 通过：Ruff 0；应用导入成功；78 passed；live 200 `{"status":"ok"}`；ready 200 `{"status":"ready","checks":{...}}`；验证后已停止服务 | `uv 0.13.7`、`Python 3.13.15`；因 DSH 注入 `UV_PROJECT_ENVIRONMENT`，命令使用项目 `.venv` 并加 `--offline`；门禁启动创建了 `data/`、`backups/`（均被忽略），验证后已删除 |

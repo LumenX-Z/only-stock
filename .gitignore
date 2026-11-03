@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# uv / 虚拟环境（.venv 由 uv sync 生成，不入库）
+.venv/
+.venv-*/
+venv/
+# 注意：uv.lock 由 uv lock/uv sync 生成，必须提交，不在此忽略。
+
+# 测试与静态检查缓存
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.dmypy.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# 构建产物
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+sdist/
+
+# 运行时数据：数据库、WAL/SHM、备份与日志
+/data/
+/backups/
+/logs/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.db
+*.log
+
+# 环境变量与密钥（.env.example 是模板，保留入库）
+.env
+.env.*
+!.env.example
+.direnv/
+
+# 编辑器与操作系统
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

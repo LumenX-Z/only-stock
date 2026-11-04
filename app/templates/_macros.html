@@ -1,0 +1,100 @@
+{% from "_icons.html" import icon %}
+{% macro pagination(page, page_size, total) -%}
+{% set pages = ((total + page_size - 1) // page_size) if page_size else 1 %}
+{% set pages = pages if pages > 0 else 1 %}
+<div class="pagination">
+  <span>共 {{ total }} 条 · 第 {{ page }} / {{ pages }} 页</span>
+  <div class="page-list">
+    <a class="page-link {{ 'is-disabled' if page <= 1 }}" href="{{ page_url(request, page - 1) }}" aria-label="上一页">{{ icon("chevron-left") }}</a>
+    {% set start = [1, page - 2] | max %}
+    {% set end = [pages, start + 4] | min %}
+    {% for number in range(start, end + 1) %}
+    <a class="page-link {{ 'is-active' if number == page }}" href="{{ page_url(request, number) }}">{{ number }}</a>
+    {% endfor %}
+    <a class="page-link {{ 'is-disabled' if page >= pages }}" href="{{ page_url(request, page + 1) }}" aria-label="下一页">{{ icon("chevron-right") }}</a>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro empty_state(title, message=none, action_href=none, action_label=none) -%}
+<div class="empty-state">
+  <div class="empty-icon">{{ icon("spark") }}</div>
+  <h3>{{ title }}</h3>
+  {% if message %}<p>{{ message }}</p>{% endif %}
+  {% if action_href and action_label %}
+  <a class="button button-secondary button-sm" href="{{ action_href }}">{{ action_label }}</a>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro error_panel(error, title="操作未完成") -%}
+{% if error %}
+<div class="alert alert-danger" role="alert">
+  <div class="alert-icon">!</div>
+  <div class="alert-body">
+    <div class="alert-title">{{ title }}：{{ error.message }}</div>
+    <div class="alert-detail">
+      错误码 <code>{{ error.code }}</code>
+      {% if error.request_id %} · 请求标识 <span class="mono">{{ error.request_id }}</span>{% endif %}
+    </div>
+    {% if error.details and error.details["items"] %}
+    <ul>
+      {% for item in error.details["items"] %}
+      <li>
+        {% if item.code %}<code>{{ item.code }}</code>{% endif %}
+        {% if item.name %} {{ item.name }}{% endif %}
+        {% if item.field %} 字段 <code>{{ item.field }}</code>{% endif %}
+        {% if item.reason %} · {{ item.reason }}{% endif %}
+        {% if item.value is defined and item.value is not none %} · 当前值 <code>{{ item.value }}</code>{% endif %}
+        {% if item.count is defined and item.count %} · {{ item.count }} 项{% endif %}
+        {% if item.is_active is defined %} · {{ "启用" if item.is_active else "已停用" }}{% endif %}
+        {% if item.allowed is defined and item.allowed %} · 允许值 {{ item.allowed | join("、") }}{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if error.details and error.details["resource"] %}
+    <div class="alert-detail muted">关联资源：{{ error.details["resource"] }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro doc_status(document) -%}
+{% if document.deleted_at %}
+<span class="badge badge-danger">已软删除</span>
+{% elif document.status == "DRAFT" %}
+<span class="badge badge-warning">草稿 · 不计入库存</span>
+{% else %}
+<span class="badge badge-success">已生效</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro doc_type(document) -%}
+{% if document.doc_type == "INBOUND" %}
+<span class="badge badge-info">入库</span>
+{% else %}
+<span class="badge badge-purple">出库</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro active_badge(is_active) -%}
+{% if is_active %}
+<span class="badge badge-success">启用</span>
+{% else %}
+<span class="badge badge-neutral">已停用</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro role_label(role) -%}
+{% if role == "COMPANY_ADMIN" %}公司管理员{% else %}库存操作员{% endif %}
+{%- endmacro %}
+
+{% macro field_error(error, name) -%}
+{% if error and error.details and error.details["items"] %}
+{% for item in error.details["items"] %}
+{% if item.field == name %}<span class="error-text">{{ item.reason }}</span>{% endif %}
+{% endfor %}
+{% endif %}
+{%- endmacro %}

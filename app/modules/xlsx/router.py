@@ -8,8 +8,6 @@
 解析接口在不持有数据库写锁的情况下读取基础资料，不写单据、审计或解析记录。
 """
 
-import tempfile
-from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
@@ -21,8 +19,7 @@ from app.auth.permissions import RequirePasswordChanged
 from app.db.database import get_session
 from app.modules.documents.models import DocType
 from app.modules.documents.service import get_document
-from app.modules.xlsx.constants import MAX_DATA_ROWS, MAX_UPLOAD_BYTES
-from app.modules.xlsx.errors import file_error
+from app.modules.xlsx.constants import MAX_DATA_ROWS
 from app.modules.xlsx.export import build_export_bytes
 from app.modules.xlsx.parser import ParsedDocument, parse_document_entry
 from app.modules.xlsx.schemas import (
@@ -37,6 +34,7 @@ from app.modules.xlsx.templates import (
     export_filenames,
     template_filenames,
 )
+from app.modules.xlsx.uploads import spool_upload
 
 router = APIRouter(
     prefix="/api/v1",
@@ -71,7 +69,7 @@ def parse_document_entry_endpoint(
     file: Annotated[UploadFile, File(...)],
 ) -> ParseResponse:
     """解析 XLSX 并返回新建页表单数据；不创建或修改任何业务数据。"""
-    path = _spool_upload(file)
+    path = spool_upload(file)
     try:
         parsed = parse_document_entry(path, doc_type=doc_type.value, session=session)
     finally:
@@ -148,39 +146,6 @@ def _parse_response(parsed: ParsedDocument) -> ParseResponse:
             for error in parsed.errors
         ],
     )
-
-
-def _spool_upload(file: UploadFile) -> Path:
-    """流式写入服务端随机临时文件（最小权限），超出限制立即拒绝。"""
-    path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            prefix="only-stock-xlsx-", suffix=".xlsx", delete=False
-        ) as handle:
-            path = Path(handle.name)
-            total = 0
-            while True:
-                chunk = file.file.read(_UPLOAD_CHUNK)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > MAX_UPLOAD_BYTES:
-                    raise file_error(
-                        "XLSX_FILE_TOO_LARGE",
-                        f"XLSX 文件超过 {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB，已拒绝",
-                        items=[
-                            {
-                                "field": "file",
-                                "limit_bytes": MAX_UPLOAD_BYTES,
-                            }
-                        ],
-                    )
-                handle.write(chunk)
-        return path
-    except BaseException:
-        if path is not None:
-            path.unlink(missing_ok=True)
-        raise
 
 
 def _xlsx_response(

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import error_panel, role_label with context %}
+
+{% block title %}编辑用户{% endblock %}
+{% block page_title %}编辑用户{% endblock %}
+{% block page_subtitle %}<p>{{ target.login_name }} · 创建于 {{ local_time(target.created_at, tz) }}</p>{% endblock %}
+{% block page_actions %}<a class="button button-secondary" href="/users">返回用户列表</a>{% endblock %}
+
+{% block content %}
+<div class="grid grid-2">
+  <section class="card">
+    <div class="card-head"><h2>账户信息</h2></div>
+    <div class="card-body stack">
+      {{ error_panel(error, "保存失败") }}
+      <form method="post" action="/users/{{ target.id }}/edit" class="stack">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="version" value="{{ target.version }}">
+        <div class="field">
+          <label>登录名</label>
+          <input class="input" value="{{ target.login_name }}" disabled>
+          <span class="hint">登录名创建后不可修改。</span>
+        </div>
+        <div class="field">
+          <label for="display_name">显示名</label>
+          <input class="input" id="display_name" name="display_name" value="{{ target.display_name }}" required maxlength="100">
+        </div>
+        <div class="field">
+          <label for="role">角色</label>
+          <select class="select" id="role" name="role">
+            <option value="OPERATOR" {{ 'selected' if target.role == "OPERATOR" }}>库存操作员</option>
+            <option value="COMPANY_ADMIN" {{ 'selected' if target.role == "COMPANY_ADMIN" }}>公司管理员</option>
+          </select>
+          <span class="hint">角色变化会立即撤销该用户全部会话与 API Key，并保护最后一名启用管理员。</span>
+        </div>
+        <div class="form-actions">
+          <button class="button" type="submit">保存修改</button>
+          <a class="button button-ghost" href="/users">取消</a>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>账户状态</h2></div>
+    <div class="card-body stack">
+      <div class="kv-list">
+        <div class="kv-row"><span>角色</span><span>{{ role_label(target.role) }}</span></div>
+        <div class="kv-row"><span>状态</span><span>{% if target.status == "ACTIVE" %}启用{% else %}已禁用{% endif %}</span></div>
+        <div class="kv-row"><span>版本</span><span class="mono">{{ target.version }}</span></div>
+        <div class="kv-row"><span>最后更新</span><span>{{ local_time(target.updated_at, tz) }}</span></div>
+        <div class="kv-row"><span>强制改密</span><span>{{ "是" if target.force_password_change else "否" }}</span></div>
+      </div>
+      {% if target.status == "ACTIVE" %}
+      <form method="post" action="/users/{{ target.id }}/disable" data-confirm="确定禁用 {{ target.login_name }}？其会话和 API Key 会立即撤销。">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="button button-soft-danger button-block" type="submit">禁用账户</button>
+      </form>
+      {% endif %}
+      <p class="muted" style="font-size: 12px">禁用不会删除账户和历史审计记录，可在需要时由数据库管理员恢复。</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

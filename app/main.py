@@ -9,8 +9,10 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.routing import Route
 
 from app.api.openapi import APP_DESCRIPTION, OPENAPI_TAGS, install_openapi_contract
@@ -25,18 +27,20 @@ from app.logging import configure_logging
 from app.mcp.server import MCP_PATH, build_mcp
 from app.middleware import RequestContextMiddleware
 from app.modules.audit.router import router as audit_router
+from app.modules.backups.router import router as backups_router
 from app.modules.documents.router import router as documents_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.masterdata.router import router as masterdata_router
 from app.modules.users.router import router as users_router
 from app.modules.users.service import bootstrap_initial_admin
 from app.modules.xlsx.router import router as xlsx_router
+from app.pages import pages_router
 from app.runtime import Runtime, build_runtime
+from app.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
 APP_NAME = "only-stock"
-APP_VERSION = "0.1.0"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -69,9 +73,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.runtime = runtime
     app.state.mcp = mcp
+    app.state.pages_enabled = True
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
     install_openapi_contract(app)
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(api_key_router)
@@ -81,6 +88,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(xlsx_router)
     app.include_router(inventory_router)
     app.include_router(audit_router)
+    app.include_router(backups_router)
+    app.include_router(pages_router)
     # MCP 与页面/API 同应用、同端口、同进程；不注册独立服务或旧版 HTTP+SSE 端点。
     app.router.routes.append(Route(MCP_PATH, endpoint=mcp.asgi_app))
     return app

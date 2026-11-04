@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state with context %}
+
+{% block title %}审计日志{% endblock %}
+{% block page_title %}审计日志{% endblock %}
+{% block page_subtitle %}<p>仅公司管理员可查询。审计只追加，不提供修改或删除。</p>{% endblock %}
+
+{% block content %}
+<div class="stack">
+  <section class="card">
+    <form class="filter-bar" method="get" action="/audit">
+      <div class="field">
+        <label for="entity_type">对象</label>
+        <select class="select input-sm" id="entity_type" name="entity_type">
+          <option value="">全部对象</option>
+          {% for value, label in entity_types %}
+          <option value="{{ value }}" {{ 'selected' if filters.entity_type == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field grow">
+        <label for="action">动作</label>
+        <input class="input input-sm" id="action" name="action" value="{{ filters.action }}" placeholder="例如 DOCUMENT_SUBMITTED">
+      </div>
+      <div class="field">
+        <label for="source">来源</label>
+        <select class="select input-sm" id="source" name="source">
+          <option value="">全部来源</option>
+          {% for value, label in sources %}
+          <option value="{{ value }}" {{ 'selected' if filters.source == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="start_date">开始日期</label>
+        <input class="input input-sm" id="start_date" name="start_date" type="date" value="{{ filters.start_date }}">
+      </div>
+      <div class="field">
+        <label for="end_date">结束日期</label>
+        <input class="input input-sm" id="end_date" name="end_date" type="date" value="{{ filters.end_date }}">
+      </div>
+      <div class="form-actions">
+        <button class="button button-sm" type="submit">{{ icon("search") }} 查询</button>
+        <a class="button button-ghost button-sm" href="/audit">重置</a>
+      </div>
+    </form>
+
+    {% if entries %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>来源</th><th>请求标识</th><th>快照</th></tr></thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr>
+            <td class="muted nowrap">{{ local_time(entry.created_at, tz) }}</td>
+            <td>{{ entry.actor_name or "系统" }}</td>
+            <td><span class="badge badge-neutral badge-plain">{{ entry.action }}</span></td>
+            <td>
+              <div class="cell-strong">{{ entry.entity_type }}</div>
+              <div class="hint mono">{{ entry.entity_id or "—" }}</div>
+            </td>
+            <td><span class="badge {{ 'badge-info' if entry.source == 'WEB' else 'badge-purple' if entry.source == 'MCP' else 'badge-neutral' }}">{{ entry.source }}</span></td>
+            <td class="mono muted" style="font-size: 11px">{{ entry.request_id or "—" }}</td>
+            <td>
+              {% if entry.before or entry.after %}
+              <details class="blocker-details">
+                <summary>查看</summary>
+                {% if entry.before %}<div class="field-label" style="margin-top:8px">变更前</div><pre class="code-block">{{ entry.before | pretty_json }}</pre>{% endif %}
+                {% if entry.after %}<div class="field-label" style="margin-top:8px">变更后</div><pre class="code-block">{{ entry.after | pretty_json }}</pre>{% endif %}
+              </details>
+              {% else %}
+              <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page, page_size, total) }}
+    {% else %}
+      {{ empty_state("没有匹配的审计记录", "调整筛选条件或时间范围。") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

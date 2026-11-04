@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · OnlyStock</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-art">
+    <div class="brand">
+      <span class="brand-mark">OS</span>
+      <span>
+        <span class="brand-name">OnlyStock</span>
+        <span class="brand-sub">INVENTORY CONTROL</span>
+      </span>
+    </div>
+    <div>
+      <h2>让每一笔出入库，都清晰可追溯。</h2>
+      <p>单一公司内网库存管理：实时库存、逐行项目、原子提交与完整审计。所有页面与 MCP 工具共享同一套业务规则。</p>
+    </div>
+    <div class="art-foot">仅限内网使用 · 请勿在公共网络保存登录凭证</div>
+  </section>
+
+  <section class="auth-panel">
+    <div class="auth-card">
+      <h1>欢迎回来</h1>
+      <p class="auth-sub">使用公司管理员分配的账户登录。</p>
+
+      {% if error %}
+      <div class="alert alert-danger" role="alert">
+        <div class="alert-icon">!</div>
+        <div class="alert-body">
+          <div class="alert-title">{{ error.message }}</div>
+          {% if error.code == "RATE_LIMITED" and error.details["items"] %}
+          <div class="alert-detail">请约 {{ error.details["items"][0].retry_after_seconds }} 秒后重试。</div>
+          {% elif error.code == "ACCOUNT_DISABLED" %}
+          <div class="alert-detail">账户已被禁用，请联系公司管理员。</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/login" autocomplete="on">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <div class="field">
+          <label for="login_name">登录名</label>
+          <input class="input" id="login_name" name="login_name" value="{{ form.get("login_name", "") }}" required autofocus autocomplete="username" placeholder="请输入登录名">
+        </div>
+        <div class="field">
+          <label for="password">密码</label>
+          <input class="input" id="password" name="password" type="password" required autocomplete="current-password" placeholder="请输入密码">
+        </div>
+        <button class="button button-lg button-block" type="submit">登录</button>
+      </form>
+
+      <p class="auth-foot">首次登录或密码被重置后，需要先修改密码。</p>
+    </div>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{% from "_icons.html" import icon %}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ status_code }} · OnlyStock</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-art">
+    <div class="brand">
+      <span class="brand-mark">OS</span>
+      <span>
+        <span class="brand-name">OnlyStock</span>
+        <span class="brand-sub">INVENTORY CONTROL</span>
+      </span>
+    </div>
+    <div>
+      <h2>{{ "请求未能完成" }}</h2>
+      <p>系统没有执行任何未完成的操作。请根据下方信息修正后重试。</p>
+    </div>
+    <div class="art-foot">错误码 {{ code }} · 请求标识 {{ request_id }}</div>
+  </section>
+
+  <section class="auth-panel">
+    <div class="auth-card">
+      <div class="badge badge-danger badge-plain">{{ status_code }}</div>
+      <h1 style="margin-top: 10px">{{ message }}</h1>
+      <p class="auth-sub">错误码 <code>{{ code }}</code>{% if request_id %} · 请求标识 <span class="mono">{{ request_id }}</span>{% endif %}</p>
+
+      {% if details and details["items"] %}
+      <div class="alert alert-warning" style="margin-top: 18px">
+        <div class="alert-icon">!</div>
+        <div class="alert-body">
+          <div class="alert-title">详细信息</div>
+          <ul>
+            {% for item in details["items"] %}
+            <li>
+              {% if item.code %}<code>{{ item.code }}</code>{% endif %}
+              {% if item.name %} {{ item.name }}{% endif %}
+              {% if item.field %} 字段 <code>{{ item.field }}</code>{% endif %}
+              {% if item.reason %} · {{ item.reason }}{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="page-actions" style="margin-top: 22px">
+        <a class="button" href="/">返回工作台</a>
+        <a class="button button-secondary" href="javascript:history.back()">返回上一页</a>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

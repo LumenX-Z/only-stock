@@ -1,0 +1,126 @@
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import role_label %}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}工作台{% endblock %} · OnlyStock</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="主导航">
+    <a class="brand" href="/">
+      <span class="brand-mark">OS</span>
+      <span>
+        <span class="brand-name">OnlyStock</span>
+        <span class="brand-sub">INVENTORY CONTROL</span>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <div>
+        <div class="nav-group-title">总览</div>
+        <ul class="nav-list">
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/') }}" href="/">{{ icon("home") }} 工作台</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="nav-group-title">库存与单据</div>
+        <ul class="nav-list">
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/inventory') and not is_active(request, '/inventory/transactions') }}" href="/inventory">{{ icon("inventory") }} 实时库存</a></li>
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/inventory/transactions') }}" href="/inventory/transactions">{{ icon("audit") }} 库存流水</a></li>
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/documents') }}" href="/documents">{{ icon("document") }} 出入库单据</a></li>
+          <li><a class="nav-link" href="/documents/new?doc_type=INBOUND">{{ icon("inbound") }} 新建入库</a></li>
+          <li><a class="nav-link" href="/documents/new?doc_type=OUTBOUND">{{ icon("outbound") }} 新建出库</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="nav-group-title">基础资料</div>
+        <ul class="nav-list">
+          <li><a class="nav-link {{ 'is-active' if request.url.path == '/masterdata/warehouses' }}" href="/masterdata/warehouses">{{ icon("warehouse") }} 仓库</a></li>
+          <li><a class="nav-link {{ 'is-active' if request.url.path == '/masterdata/departments' }}" href="/masterdata/departments">{{ icon("department") }} 部门</a></li>
+          <li><a class="nav-link {{ 'is-active' if request.url.path == '/masterdata/projects' }}" href="/masterdata/projects">{{ icon("project") }} 项目</a></li>
+          <li><a class="nav-link {{ 'is-active' if request.url.path == '/masterdata/manufacturers' }}" href="/masterdata/manufacturers">{{ icon("factory") }} 厂家</a></li>
+          <li><a class="nav-link {{ 'is-active' if request.url.path == '/masterdata/categories' }}" href="/masterdata/categories">{{ icon("category") }} 分类</a></li>
+          <li><a class="nav-link {{ 'is-active' if request.url.path == '/masterdata/materials' }}" href="/masterdata/materials">{{ icon("material") }} 物资</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="nav-group-title">账户与系统</div>
+        <ul class="nav-list">
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/api-keys') }}" href="/api-keys">{{ icon("key") }} 我的 API Key</a></li>
+          {% if auth.user.role == "COMPANY_ADMIN" %}
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/users') }}" href="/users">{{ icon("users") }} 用户管理</a></li>
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/audit') }}" href="/audit">{{ icon("audit") }} 审计日志</a></li>
+          <li><a class="nav-link {{ 'is-active' if is_active(request, '/backups') }}" href="/backups">{{ icon("backup") }} 备份管理</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      OnlyStock 0.1.0 · 单一公司 · 单库部署
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-button mobile-nav-toggle" type="button" data-nav-toggle aria-label="打开导航">{{ icon("menu") }}</button>
+      <div class="topbar-title">
+        <h1>{% block page_title %}{% endblock %}</h1>
+        {% block page_subtitle %}{% endblock %}
+      </div>
+      <div class="topbar-actions">
+        <div class="page-actions">{% block page_actions %}{% endblock %}</div>
+        <div class="user-chip">
+          <span class="avatar">{{ auth.user.display_name[:1] | upper }}</span>
+          <span class="user-meta">
+            <strong>{{ auth.user.display_name }}</strong>
+            <span>{{ role_label(auth.user.role) }}</span>
+          </span>
+        </div>
+        <form class="inline-form" method="post" action="/logout">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="icon-button" type="submit" title="退出登录" aria-label="退出登录">{{ icon("logout") }}</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content">
+      {% for flash in flashes %}
+      <div class="alert alert-{{ flash.level }}" role="status">
+        <div class="alert-icon">{{ "✓" if flash.level == "success" else "!" }}</div>
+        <div class="alert-body">
+          <div class="alert-title">{{ flash.message }}</div>
+          {% if flash.detail %}<div class="alert-detail">{{ flash.detail }}</div>{% endif %}
+          {% if flash.link_url %}
+          <div class="alert-detail"><a class="button button-secondary button-sm" href="{{ flash.link_url }}">{{ flash.link_label or "前往处理" }}</a></div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<dialog class="confirm-dialog" id="confirm-dialog">
+  <div class="confirm-body">
+    <h3>确认操作</h3>
+    <p id="confirm-message"></p>
+  </div>
+  <div class="confirm-actions">
+    <button class="button button-secondary" type="button" id="confirm-cancel">取消</button>
+    <button class="button button-danger" type="button" id="confirm-accept">确认</button>
+  </div>
+</dialog>
+</body>
+</html>

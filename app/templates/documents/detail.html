@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import doc_status, doc_type, error_panel with context %}
+
+{% block title %}{{ document.doc_no }}{% endblock %}
+{% block page_title %}{{ document.doc_no }}{% endblock %}
+{% block page_subtitle %}
+<p>{{ "入库单" if document.doc_type == "INBOUND" else "出库单" }} · {{ "草稿不计入库存" if document.status == "DRAFT" else "已计入库存" }}</p>
+{% endblock %}
+{% block page_actions %}
+<a class="button button-secondary" href="/documents">返回列表</a>
+{% if can_export %}<a class="button button-secondary" href="/api/v1/documents/{{ document.id }}/export">{{ icon("download") }} {{ "下载入库单" if document.doc_type == "INBOUND" else "下载出库单" }}</a>{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="stack">
+  {% if created_draft %}
+  <div class="alert alert-warning" role="status">
+    <div class="alert-icon">!</div>
+    <div class="alert-body">
+      <div class="alert-title">草稿已创建，但提交未成功</div>
+      <div class="alert-detail">单据 {{ document.doc_no }} 已保存为草稿，不会计入库存。修正下方问题后可直接再次提交；无需重新创建单据。</div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if error %}
+    {% if error.code == "INSUFFICIENT_STOCK" or error.code == "NEGATIVE_STOCK" %}
+    <div class="alert alert-danger" role="alert">
+      <div class="alert-icon">!</div>
+      <div class="alert-body">
+        <div class="alert-title">{{ error.message }}</div>
+        <div class="alert-detail">服务端最新可用量如下，请定位到对应明细行修正后重试。</div>
+        <ul>
+          {% for item in error.details["items"] %}
+          {% set matched = (lines | selectattr("material_code", "equalto", item.code) | list) %}
+          <li>
+            {% if matched %}第 {{ matched[0].line_no }} 行{% endif %}
+            {% if item.code %}<code>{{ item.code }}</code>{% endif %}
+            {% if item.name %} {{ item.name }}{% endif %}
+            · 可用量 <strong>{{ item.available }}</strong>
+            · 请求量 <strong>{{ item.requested }}</strong>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="alert-detail mono">{{ error.code }} · {{ error.request_id }}</div>
+      </div>
+    </div>
+    {% else %}
+      {{ error_panel(error, "单据操作未完成") }}
+    {% endif %}
+  {% endif %}
+
+  <section class="card">
+    <div class="card-head">
+      <h2>{{ document.doc_no }}</h2>
+      <div class="card-actions">
+        {{ doc_type(document) }}
+        {{ doc_status(document) }}
+        {% if document.status == "DRAFT" %}<span class="badge badge-warning">不计入库存</span>{% endif %}
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="meta-grid">
+        <div class="meta-item"><div class="meta-label">仓库</div><div class="meta-value">{{ document.warehouse_name }} <span class="muted mono">{{ document.warehouse_code }}</span></div></div>
+        <div class="meta-item"><div class="meta-label">管理部门</div><div class="meta-value">{{ document.department_name }} <span class="muted mono">{{ document.department_code }}</span></div></div>
+        <div class="meta-item"><div class="meta-label">创建人</div><div class="meta-value">{{ document.created_by_name }}</div></div>
+        <div class="meta-item"><div class="meta-label">创建时间</div><div class="meta-value">{{ local_time(document.created_at, tz) }}</div></div>
+        <div class="meta-item"><div class="meta-label">来源</div><div class="meta-value">{{ document.created_source }}</div></div>
+        <div class="meta-item"><div class="meta-label">版本</div><div class="meta-value mono">{{ document.version }}</div></div>
+        <div class="meta-item"><div class="meta-label">生效时间</div><div class="meta-value">{{ local_time(document.submitted_at, tz) if document.submitted_at else "—" }}</div></div>
+        <div class="meta-item"><div class="meta-label">生效人</div><div class="meta-value">{{ document.submitted_by_name or "—" }}</div></div>
+        {% if document.deleted_at %}
+        <div class="meta-item"><div class="meta-label">软删除时间</div><div class="meta-value">{{ local_time(document.deleted_at, tz) }}</div></div>
+        <div class="meta-item"><div class="meta-label">软删除操作人</div><div class="meta-value">{{ document.deleted_by or "—" }}</div></div>
+        {% endif %}
+      </div>
+      <div class="actions" style="margin-top: 20px">
+        {% if can_edit %}<a class="button" href="/documents/{{ document.id }}/edit">{{ icon("document") }} 编辑草稿</a>{% endif %}
+        {% if can_submit %}
+        <form method="post" action="/documents/{{ document.id }}/submit" data-confirm="提交后单据立即生效并计入库存，确定继续？">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="version" value="{{ document.version }}">
+          <button class="button button-success" type="submit">{{ icon("check") }} 提交生效</button>
+        </form>
+        {% endif %}
+        {% if can_discard %}
+        <form method="post" action="/documents/{{ document.id }}/discard" data-confirm="确定删除此草稿？删除后不可恢复。">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="version" value="{{ document.version }}">
+          <button class="button button-soft-danger" type="submit">{{ icon("trash") }} 删除草稿</button>
+        </form>
+        {% endif %}
+        {% if can_soft_delete %}
+        <form method="post" action="/documents/{{ document.id }}/delete" data-confirm="软删除后该单据退出库存汇总，但历史记录保留。确定继续？">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="button button-danger" type="submit">{{ icon("trash") }} 软删除单据</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>明细（{{ lines | length }} 行）</h2></div>
+    <div class="table-wrap">
+      <table class="table detail-lines">
+        <thead>
+          <tr><th>#</th><th>物资</th><th>分类</th><th>数量</th>{% if document.doc_type == "INBOUND" %}<th>厂家</th>{% endif %}<th>项目</th><th>备注</th></tr>
+        </thead>
+        <tbody>
+          {% for line in lines %}
+          <tr>
+            <td class="num">{{ line.line_no }}</td>
+            <td><span class="cell-strong">{{ line.material_name }}</span><div class="hint mono">{{ line.material_code }}</div></td>
+            <td>{{ line.parent_category_name ~ " / " if line.parent_category_name else "" }}{{ line.category_name }}</td>
+            <td class="num">{{ line.quantity }} {{ line.unit }}</td>
+            {% if document.doc_type == "INBOUND" %}<td>{{ line.manufacturer_name or "—" }}</td>{% endif %}
+            <td>{{ line.project_name or "—" }}</td>
+            <td>{{ line.remark or "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card card-pad">
+    <div class="kv-list">
+      <div class="kv-row"><span>客户端请求标识</span><span class="mono">{{ document.request_id }}</span></div>
+      <div class="kv-row"><span>创建来源</span><span>{{ document.created_source }}</span></div>
+      <div class="kv-row"><span>项目摘要</span><span>{% if document.projects %}{% for project in document.projects %}{{ project.project_name }}{% if not loop.last %}、{% endif %}{% endfor %}{% else %}—{% endif %}</span></div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import error_panel, doc_status with context %}
+
+{% block title %}{{ "新建" if mode == "new" else "编辑" }}{{ "入库" if doc_type == "INBOUND" else "出库" }}单{% endblock %}
+{% block page_title %}{{ "新建" if mode == "new" else "编辑" }}{{ "入库" if doc_type == "INBOUND" else "出库" }}单{% endblock %}
+{% block page_subtitle %}
+<p>{% if mode == "new" %}保存草稿不计入库存；提交生效后立即更新库存。{% else %}只有未删除的草稿可以编辑；保存后仍不计入库存。{% endif %}</p>
+{% endblock %}
+{% block page_actions %}<a class="button button-secondary" href="/documents">返回单据列表</a>{% endblock %}
+
+{% block content %}
+<div class="stack">
+  {% if parse_result %}
+    {% if parse_result.status == "PARTIAL" %}
+    <div class="alert alert-warning" role="status">
+      <div class="alert-icon">!</div>
+      <div class="alert-body">
+        <div class="alert-title">部分填入：{{ parse_result.notice }}</div>
+        <div class="alert-detail">总行数 {{ parse_result.total_rows }} · 成功填入 {{ parse_result.filled_rows }} · 跳过 {{ parse_result.skipped_rows }}。请在保存或提交前核对下方明细。</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-success" role="status">
+      <div class="alert-icon">✓</div>
+      <div class="alert-body">
+        <div class="alert-title">全部填入：{{ parse_result.notice }}</div>
+        <div class="alert-detail">总行数 {{ parse_result.total_rows }} · 成功填入 {{ parse_result.filled_rows }}。解析不会自动保存或提交。</div>
+      </div>
+    </div>
+    {% endif %}
+    {% if parse_result.errors %}
+    <details class="card" open>
+      <summary class="card-head" style="cursor: pointer"><h2>错误摘要（{{ parse_result.errors | length }} 行）</h2><span class="card-sub">按 Excel 原始行号</span></summary>
+      <div class="table-wrap">
+        <table class="table table-compact">
+          <thead><tr><th>Excel 行号</th><th>字段</th><th>错误码</th><th>原因</th></tr></thead>
+          <tbody>
+            {% for item in parse_result.errors %}
+            <tr>
+              <td class="num">{{ item.source_row_no }}</td>
+              <td>{{ item.error_field }}</td>
+              <td><code>{{ item.error_code }}</code></td>
+              <td>{{ item.message }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endif %}
+  {% endif %}
+
+  {{ error_panel(error, "单据操作未完成") }}
+
+  <form id="document-form" method="post" action="{{ '/documents/new' if mode == 'new' else '/documents/' ~ document.id ~ '/edit' }}" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="doc_type" value="{{ doc_type }}">
+    <input type="hidden" name="request_id" value="{{ request_id }}">
+    {% if mode == "edit" %}<input type="hidden" name="version" value="{{ version }}">{% endif %}
+
+    <div class="stack">
+      <section class="card">
+        <div class="card-head">
+          <h2>{{ "单据头" if mode == "new" else "草稿 " ~ document.doc_no }}</h2>
+          {% if mode == "edit" %}
+          <div class="card-actions">{{ doc_status(document) }} <span class="badge badge-warning">草稿 · 不计入库存</span></div>
+          {% else %}
+          <div class="card-actions">
+            <div class="tabs">
+              <a class="tab {{ 'is-active' if doc_type == 'INBOUND' }}" href="/documents/new?doc_type=INBOUND">入库</a>
+              <a class="tab {{ 'is-active' if doc_type == 'OUTBOUND' }}" href="/documents/new?doc_type=OUTBOUND">出库</a>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="field">
+              <label for="warehouse_id">仓库</label>
+              <select class="select" id="warehouse_id" name="warehouse_id" required>
+                <option value="">请选择仓库</option>
+                {% for warehouse in warehouses %}
+                <option value="{{ warehouse.id }}" {{ 'selected' if warehouse_id == warehouse.id }}>{{ warehouse.name }}（{{ warehouse.code }}）{{ "（已停用）" if not warehouse.is_active }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label for="department_id">管理部门</label>
+              <select class="select" id="department_id" name="department_id" required>
+                <option value="">请选择部门</option>
+                {% for department in departments %}
+                <option value="{{ department.id }}" {{ 'selected' if department_id == department.id }}>{{ department.name }}（{{ department.code }}）{{ "（已停用）" if not department.is_active }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <p class="hint" style="margin-top: 10px">{% if doc_type == "INBOUND" %}入库明细必须选择厂家。{% else %}出库不录入厂家；可用量提示仅供参考，服务端提交时会重新校验。{% endif %}</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>明细</h2>
+          <div class="card-sub">项目与备注按行保存；同一物资可拆分到不同项目。</div>
+          <div class="card-actions">
+            <button class="button button-secondary button-sm" type="button" id="add-line">{{ icon("plus") }} 添加一行</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="line-table-wrap">
+            <table class="line-table">
+              <thead>
+                <tr>
+                  <th style="width: 44px">#</th>
+                  <th style="min-width: 250px">物资</th>
+                  <th style="width: 120px">数量</th>
+                  {% if doc_type == "INBOUND" %}<th style="min-width: 180px">厂家</th>{% endif %}
+                  <th style="min-width: 180px">项目（可选）</th>
+                  <th style="min-width: 180px">备注</th>
+                  <th style="width: 74px"></th>
+                </tr>
+              </thead>
+              <tbody id="line-rows">
+                {% for line in lines %}
+                {% set selected = (materials | selectattr("id", "equalto", line.material_id) | list | first) %}
+                <tr class="line-row {{ 'is-collapsed' if loop.index > 100 }}">
+                  <td><span class="line-no">{{ loop.index }}</span></td>
+                  <td>
+                    <select class="select input-sm" name="line_material_id" required
+                      {% if doc_type == "OUTBOUND" %}
+                      hx-get="/partials/inventory-balance"
+                      hx-trigger="change"
+                      hx-target="next .line-balance"
+                      hx-include="#warehouse_id"
+                      {% endif %}>
+                      <option value="">请选择物资</option>
+                      {% for material in materials %}
+                      <option value="{{ material.id }}"
+                        data-unit="{{ material.unit }}"
+                        data-quantity-type="{{ material.quantity_type }}"
+                        {{ 'selected' if line.material_id == material.id }}>
+                        {{ material.label }}{{ "（已停用）" if not material.is_active }}                      </option>
+                      {% endfor %}
+                    </select>
+                    {% if doc_type == "OUTBOUND" %}
+                    <div class="line-balance">选择仓库与物资后显示可用量</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <input class="input input-sm" name="line_quantity" value="{{ line.quantity }}" required
+                      inputmode="{{ 'numeric' if selected and selected.quantity_type == 'INTEGER' else 'decimal' }}"
+                      step="{{ '1' if selected and selected.quantity_type == 'INTEGER' else '0.001' }}"
+                      placeholder="{{ '整数' if selected and selected.quantity_type == 'INTEGER' else '0.000' }}">
+                    <div class="line-balance"><span class="line-unit">{{ selected.unit if selected else "" }}</span></div>
+                  </td>
+                  {% if doc_type == "INBOUND" %}
+                  <td>
+                    <select class="select input-sm" name="line_manufacturer_id" required>
+                      <option value="">请选择厂家</option>
+                      {% for manufacturer in manufacturers %}
+                      <option value="{{ manufacturer.id }}" {{ 'selected' if line.manufacturer_id == manufacturer.id }}>{{ manufacturer.name }}（{{ manufacturer.code }}）{{ "（已停用）" if not manufacturer.is_active }}</option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                  {% endif %}
+                  <td>
+                    <div style="display: flex; gap: 6px; align-items: center">
+                      <select class="select input-sm" name="line_project_id">
+                        <option value="">不指定项目</option>
+                        {% for project in projects %}
+                        <option value="{{ project.id }}" {{ 'selected' if line.project_id == project.id }}>{{ project.name }}（{{ project.code }}）{{ "（已停用）" if not project.is_active }}</option>
+                        {% endfor %}
+                      </select>
+                      <button class="button button-ghost button-sm" type="button" data-apply-project title="把本行项目应用到全部明细">应用到全部</button>
+                    </div>
+                  </td>
+                  <td><input class="input input-sm" name="line_remark" value="{{ line.remark }}" maxlength="500" placeholder="可选"></td>
+                  <td>
+                    <div class="line-actions">
+                      <button class="icon-button" type="button" data-remove-line title="删除本行" aria-label="删除本行">{{ icon("trash") }}</button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="line-toolbar">
+            <span class="hint">整数物资步长 1，小数物资步长 0.001；服务端仍会独立校验。</span>
+            {% if lines | length > 100 %}
+            <button class="button button-secondary button-sm" type="button" id="toggle-lines" data-collapsed="true">显示全部 {{ lines | length }} 行</button>
+            <span class="hint">超过 100 行默认折叠，避免页面失去响应；所有行都会随表单提交。</span>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      {% if mode == "new" %}
+      <section class="card">
+        <div class="card-head">
+          <h2>XLSX 快速录入</h2>
+          <div class="card-sub">仅用于填入当前新单，不自动保存或提交；成功后会整体替换单据头和全部有效明细。</div>
+        </div>
+        <div class="card-body stack">
+          <div class="alert alert-info">
+            <div class="alert-icon">i</div>
+            <div class="alert-body">
+              <div class="alert-title">使用前请确认</div>
+              <div class="alert-detail">最大 5 MiB / 2,000 非空数据行；同一文件可重复解析；解析失败会保留当前表单内容。</div>
+            </div>
+          </div>
+          <div class="actions">
+            <a class="button button-secondary" href="/api/v1/document-templates/{{ doc_type }}">{{ icon("download") }} 下载{{ "入库" if doc_type == "INBOUND" else "出库" }}模板</a>
+          </div>
+          <label class="dropzone">
+            <input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            <span class="drop-icon">{{ icon("upload") }}</span>
+            <span class="drop-title">选择或拖入 XLSX 文件</span>
+            <span class="drop-hint">解析前若表单已有内容，会先请求确认；解析期间请勿重复上传。</span>
+            <span class="file-name"></span>
+          </label>
+          <div class="actions">
+            <button class="button button-secondary" type="submit" formaction="/documents/parse" formnovalidate data-confirm-parse="当前表单已有内容，解析将整体替换单据头和全部有效明细，确定继续？">{{ icon("upload") }} 解析并填入表单</button>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      <div class="form-actions">
+        <button class="button" type="submit" name="action" value="save">{{ icon("check") }} 保存草稿</button>
+        <button class="button button-success" type="submit" name="action" value="submit" data-confirm="提交后单据立即生效并计入库存，确定继续？">{{ icon("outbound") }} 提交生效</button>
+        <a class="button button-ghost" href="{{ '/documents/' ~ document.id if mode == 'edit' else '/documents' }}">取消</a>
+      </div>
+    </div>
+  </form>
+</div>
+
+<template id="line-row-template">
+  <tr class="line-row">
+    <td><span class="line-no">1</span></td>
+    <td>
+      <select class="select input-sm" name="line_material_id" required
+        {% if doc_type == "OUTBOUND" %}
+        hx-get="/partials/inventory-balance" hx-trigger="change" hx-target="next .line-balance" hx-include="#warehouse_id"
+        {% endif %}>
+        <option value="">请选择物资</option>
+        {% for material in materials %}
+        <option value="{{ material.id }}" data-unit="{{ material.unit }}" data-quantity-type="{{ material.quantity_type }}">{{ material.label }}{{ "（已停用）" if not material.is_active }}</option>
+        {% endfor %}
+      </select>
+      {% if doc_type == "OUTBOUND" %}<div class="line-balance">选择仓库与物资后显示可用量</div>{% endif %}
+    </td>
+    <td>
+      <input class="input input-sm" name="line_quantity" inputmode="decimal" step="0.001" placeholder="0.000" required>
+      <div class="line-balance"><span class="line-unit"></span></div>
+    </td>
+    {% if doc_type == "INBOUND" %}
+    <td>
+      <select class="select input-sm" name="line_manufacturer_id" required>
+        <option value="">请选择厂家</option>
+        {% for manufacturer in manufacturers %}<option value="{{ manufacturer.id }}">{{ manufacturer.name }}（{{ manufacturer.code }}）{{ "（已停用）" if not manufacturer.is_active }}</option>{% endfor %}
+      </select>
+    </td>
+    {% endif %}
+    <td>
+      <div style="display: flex; gap: 6px; align-items: center">
+        <select class="select input-sm" name="line_project_id">
+          <option value="">不指定项目</option>
+          {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}（{{ project.code }}）{{ "（已停用）" if not project.is_active }}</option>{% endfor %}
+        </select>
+        <button class="button button-ghost button-sm" type="button" data-apply-project>应用到全部</button>
+      </div>
+    </td>
+    <td><input class="input input-sm" name="line_remark" maxlength="500" placeholder="可选"></td>
+    <td><div class="line-actions"><button class="icon-button" type="button" data-remove-line title="删除本行" aria-label="删除本行">{{ icon("trash") }}</button></div></td>
+  </tr>
+</template>
+{% endblock %}

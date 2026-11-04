@@ -28,6 +28,10 @@ OPENAPI_TAGS: list[dict[str, Any]] = [
     {"name": "xlsx", "description": "XLSX 模板、快速录入解析与单张导出（docs/11 8.5）"},
     {"name": "inventory", "description": "实时库存与有效单据流水查询（docs/11 8.5）"},
     {"name": "audit", "description": "审计查询，仅公司管理员（docs/10 8.4）"},
+    {
+        "name": "backups",
+        "description": "手动备份与备份状态，仅公司管理员（docs/10 8.4、docs/13 10.6）",
+    },
 ]
 
 _HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "options", "head", "trace"})

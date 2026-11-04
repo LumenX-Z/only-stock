@@ -39,6 +39,7 @@
 | `GET /api/v1/inventory` | `warehouse_code`、`material_code`、`material_name`、`balance` | `warehouse_code` | `asc` |
 | `GET /api/v1/inventory/transactions` | `submitted_at`、`doc_no`、`line_no`、`material_code`、`quantity` | `submitted_at` | `desc` |
 | `GET /api/v1/audit-logs` | `created_at`、`action`、`entity_type`、`source` | `created_at` | `desc` |
+| `GET /api/v1/backups` | `created_at`、`id`、`status`、`size_bytes` | `created_at` | `desc` |
 
 统一错误结构：
 

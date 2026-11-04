@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state, error_panel with context %}
+
+{% block title %}备份管理{% endblock %}
+{% block page_title %}备份管理{% endblock %}
+{% block page_subtitle %}<p>在线一致性备份、完整性校验与保留集管理。恢复只能通过离线 CLI 执行。</p>{% endblock %}
+
+{% block content %}
+<div class="stack">
+  {{ error_panel(error, "备份失败") }}
+
+  <section class="grid grid-3" style="align-items: start">
+    <div class="card" style="grid-column: span 2">
+      <div class="card-head">
+        <h2>备份集</h2>
+        <div class="card-sub">保留最近 {{ retention }} 个成功备份集</div>
+      </div>
+      {% if items %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>备份集 ID</th><th>时间</th><th>状态</th><th>大小</th><th>完整性</th><th>SHA-256</th></tr></thead>
+          <tbody>
+            {% for item in items %}
+            <tr class="{{ 'is-muted' if item.status == 'FAILED' }}">
+              <td class="mono">{{ item.id }}</td>
+              <td class="muted nowrap">{{ local_time(item.created_at, tz) }}</td>
+              <td>
+                {% if item.status == "SUCCESS" %}<span class="badge badge-success">成功</span>
+                {% else %}<span class="badge badge-danger">失败</span>{% endif %}
+                {% if item.error %}<div class="hint">{{ item.error }}</div>{% endif %}
+              </td>
+              <td class="num">{{ (item.size_bytes / 1024 / 1024) | round(2) }} MiB</td>
+              <td>{% if item.integrity == "ok" %}<span class="badge badge-success badge-plain">ok</span>{% else %}<span class="muted">{{ item.integrity or "—" }}</span>{% endif %}</td>
+              <td class="mono muted" style="font-size: 11px">{{ (item.sha256 or "—")[:16] }}{% if item.sha256 %}…{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {{ pagination(page, page_size, total) }}
+      {% else %}
+        {{ empty_state("还没有备份集", "点击右侧“立即备份”创建第一份完整在线备份。") }}
+      {% endif %}
+    </div>
+
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><h2>手动备份</h2></div>
+        <div class="card-body stack">
+          <p class="soft" style="font-size: 13px">手动备份与每日 02:00 定时备份同等计入保留集。备份使用 SQLite Online Backup API，成功后执行完整性校验。</p>
+          <form method="post" action="/backups" data-confirm="立即执行一次完整在线备份？执行期间会产生一份完整数据库副本。">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="button button-block" type="submit">{{ icon("backup") }} 立即备份</button>
+          </form>
+          <ul class="warning-list">
+            <li>失败不会生成可恢复备份集，也不会显示为“已执行”。</li>
+            <li>恢复只能在停止应用后通过 `python -m app.cli restore` 执行。</li>
+            <li>仅保留最近 {{ retention }} 个成功备份集，更早的成功集会被清理。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>备份集结构</h2></div>
+        <div class="card-body">
+          <pre class="code-block">/backups/&lt;backup_set_id&gt;/
+  inventory.sqlite3
+  manifest.json
+  integrity-report.json</pre>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+{% endblock %}

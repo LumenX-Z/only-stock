@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state with context %}
+
+{% block title %}我的 API Key{% endblock %}
+{% block page_title %}我的 API Key{% endblock %}
+{% block page_subtitle %}<p>仅供本人使用。完整 Key 只在创建成功时显示一次，刷新或离开后不可恢复。</p>{% endblock %}
+
+{% block content %}
+<div class="stack">
+  {% if created_key %}
+  <section class="card" style="border-color: #6ee7b7; box-shadow: 0 18px 50px -30px rgb(5 150 105 / 60%)">
+    <div class="card-head">
+      <h2>API Key 创建成功</h2>
+      <div class="card-actions"><span class="badge badge-success">仅显示一次</span></div>
+    </div>
+    <div class="card-body stack">
+      <div class="alert alert-warning">
+        <div class="alert-icon">!</div>
+        <div class="alert-body">
+          <div class="alert-title">请立即复制并妥善保管</div>
+          <div class="alert-detail">离开或刷新本页后将无法再次查看完整 Key。若丢失，只能吊销后重新创建。</div>
+        </div>
+      </div>
+      <div class="secret-box">
+        <code id="new-api-key">{{ created_key }}</code>
+        <button class="button button-secondary button-sm" type="button" data-copy="#new-api-key">复制</button>
+      </div>
+      <div class="actions">
+        <a class="button" href="/api-keys">我已保存，返回列表</a>
+      </div>
+    </div>
+  </section>
+  {% elif created_token_missing %}
+  <div class="alert alert-info">
+    <div class="alert-icon">i</div>
+    <div class="alert-body">
+      <div class="alert-title">完整 Key 已不可恢复</div>
+      <div class="alert-detail">创建成功页已关闭或过期。若未保存，请吊销该 Key 后重新创建。</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="grid grid-3" style="align-items: start">
+    <div class="card" style="grid-column: span 2">
+      <div class="card-head">
+        <h2>Key 列表</h2>
+        <div class="card-actions">
+          <form method="get" action="/api-keys">
+            <label class="checkbox-row">
+              <input type="checkbox" name="include_revoked" value="1" {{ 'checked' if include_revoked }} data-auto-submit>
+              含已吊销
+            </label>
+          </form>
+        </div>
+      </div>
+      {% if keys %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>用途名称</th><th>末四位</th><th>创建时间</th><th>最后使用</th><th>状态</th><th></th></tr></thead>
+          <tbody>
+            {% for key in keys %}
+            <tr class="{{ 'is-muted' if key.revoked_at }}">
+              <td class="cell-strong">{{ key.name }}</td>
+              <td><span class="code-chip">••••{{ key.key_suffix }}</span></td>
+              <td class="muted nowrap">{{ local_time(key.created_at, tz) }}</td>
+              <td class="muted nowrap">{{ local_time(key.last_used_at, tz) if key.last_used_at else "从未使用" }}</td>
+              <td>
+                {% if key.revoked_at %}
+                <span class="badge badge-neutral">已吊销</span>
+                <div class="hint">{{ key.revoke_reason or "" }}</div>
+                {% else %}
+                <span class="badge badge-success">有效</span>
+                {% endif %}
+              </td>
+              <td class="cell-actions">
+                {% if not key.revoked_at %}
+                <form method="post" action="/api-keys/{{ key.id }}/revoke" data-confirm="确定吊销“{{ key.name }}”？吊销后不可恢复，使用该 Key 的 MCP 客户端会立即失效。">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-soft-danger button-sm" type="submit">吊销</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {{ pagination(page, page_size, total) }}
+      {% else %}
+        {{ empty_state("还没有 API Key", "创建一个 Key 用于 MCP 客户端认证；最多 10 把有效 Key。") }}
+      {% endif %}
+    </div>
+
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><h2>创建 API Key</h2></div>
+        <div class="card-body">
+          <form method="post" action="/api-keys" class="stack">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <div class="field">
+              <label for="name">用途名称</label>
+              <input class="input" id="name" name="name" required maxlength="50" placeholder="例如 我的 MCP 客户端">
+              <span class="hint">仅用于标识，不会改变权限。最多 {{ max_keys }} 把有效 Key。</span>
+            </div>
+            <button class="button button-block" type="submit">{{ icon("plus") }} 创建 Key</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>MCP 连接</h2></div>
+        <div class="card-body stack">
+          <div class="field">
+            <span class="field-label">MCP 地址</span>
+            <div class="secret-box"><code>{{ mcp_url }}</code></div>
+          </div>
+          <div class="field">
+            <span class="field-label">Bearer 配置示例</span>
+            <pre class="code-block">{
+  "mcpServers": {
+    "only-stock": {
+      "url": "{{ mcp_url }}",
+      "headers": {
+        "Authorization": "Bearer &lt;你的 API Key&gt;"
+      }
+    }
+  }
+}</pre>
+          </div>
+          <ul class="warning-list">
+            <li>示例使用占位符，页面不会展示真实 Key。</li>
+            <li>改密、角色变化或账户禁用会立即撤销全部 Key。</li>
+            <li>内网 HTTP 为明文传输，请勿在公共网络使用。</li>
+            <li>每位用户最多 {{ max_keys }} 把有效 Key。</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state, doc_status, doc_type with context %}
+
+{% block title %}出入库单据{% endblock %}
+{% block page_title %}出入库单据{% endblock %}
+{% block page_subtitle %}<p>草稿不计入库存；已生效单据可按规则软删除并退出库存汇总。</p>{% endblock %}
+{% block page_actions %}
+<a class="button" href="/documents/new?doc_type=INBOUND">{{ icon("inbound") }} 新建入库</a>
+<a class="button button-secondary" href="/documents/new?doc_type=OUTBOUND">{{ icon("outbound") }} 新建出库</a>
+{% endblock %}
+
+{% block content %}
+<div class="stack">
+  <section class="card">
+    <form class="filter-bar" method="get" action="/documents">
+      <div class="field">
+        <label for="doc_type_filter">类型</label>
+        <select class="select input-sm" id="doc_type_filter" name="doc_type">
+          <option value="">全部类型</option>
+          <option value="INBOUND" {{ 'selected' if filters.doc_type == "INBOUND" }}>入库</option>
+          <option value="OUTBOUND" {{ 'selected' if filters.doc_type == "OUTBOUND" }}>出库</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="status_filter">状态</label>
+        <select class="select input-sm" id="status_filter" name="status">
+          <option value="">全部状态</option>
+          <option value="DRAFT" {{ 'selected' if filters.status == "DRAFT" }}>草稿</option>
+          <option value="POSTED" {{ 'selected' if filters.status == "POSTED" }}>已生效</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="warehouse_filter">仓库</label>
+        <select class="select input-sm" id="warehouse_filter" name="warehouse_id">
+          <option value="">全部仓库</option>
+          {% for warehouse in warehouses %}<option value="{{ warehouse.id }}" {{ 'selected' if filters.warehouse_id == warehouse.id }}>{{ warehouse.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="department_filter">部门</label>
+        <select class="select input-sm" id="department_filter" name="department_id">
+          <option value="">全部部门</option>
+          {% for department in departments %}<option value="{{ department.id }}" {{ 'selected' if filters.department_id == department.id }}>{{ department.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="project_filter">项目</label>
+        <select class="select input-sm" id="project_filter" name="project_id">
+          <option value="">全部项目</option>
+          {% for project in projects %}<option value="{{ project.id }}" {{ 'selected' if filters.project_id == project.id }}>{{ project.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="manufacturer_filter">厂家（入库）</label>
+        <select class="select input-sm" id="manufacturer_filter" name="manufacturer_id">
+          <option value="">全部厂家</option>
+          {% for manufacturer in manufacturers %}<option value="{{ manufacturer.id }}" {{ 'selected' if filters.manufacturer_id == manufacturer.id }}>{{ manufacturer.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="doc_no_filter">单号</label>
+        <input class="input input-sm" id="doc_no_filter" name="doc_no" value="{{ filters.doc_no }}" placeholder="精确单号">
+      </div>
+      <div class="field">
+        <label for="deleted_filter">软删除</label>
+        <select class="select input-sm" id="deleted_filter" name="deleted">
+          <option value="">全部</option>
+          <option value="no" {{ 'selected' if filters.deleted == "no" }}>未删除</option>
+          <option value="yes" {{ 'selected' if filters.deleted == "yes" }}>已软删除</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="start_date">开始日期</label>
+        <input class="input input-sm" id="start_date" name="start_date" type="date" value="{{ filters.start_date }}">
+      </div>
+      <div class="field">
+        <label for="end_date">结束日期</label>
+        <input class="input input-sm" id="end_date" name="end_date" type="date" value="{{ filters.end_date }}">
+      </div>
+      <div class="form-actions">
+        <button class="button button-sm" type="submit">{{ icon("search") }} 筛选</button>
+        <a class="button button-ghost button-sm" href="/documents">重置</a>
+      </div>
+    </form>
+
+    {% if items %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>单号</th><th>类型</th><th>状态</th><th>仓库 / 部门</th><th>项目</th><th>创建人</th><th>创建时间</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for document in items %}
+          <tr class="{{ 'is-muted' if document.deleted }}">
+            <td><a class="mono cell-strong" href="/documents/{{ document.id }}">{{ document.doc_no }}</a></td>
+            <td>{{ doc_type(document) }}</td>
+            <td>{{ doc_status(document) }}</td>
+            <td>
+              <div class="cell-strong">{{ document.warehouse_name }}</div>
+              <div class="hint">{{ document.department_name }}</div>
+            </td>
+            <td>
+              {% if document.projects %}
+                {% for project in document.projects %}
+                <span class="badge badge-neutral badge-plain">{{ project.project_name }}</span>
+                {% endfor %}
+              {% else %}
+              <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>{{ document.created_by_name }}</td>
+            <td class="muted nowrap">{{ local_time(document.created_at, tz) }}</td>
+            <td class="cell-actions"><a class="button button-ghost button-sm" href="/documents/{{ document.id }}">查看</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page, page_size, total) }}
+    {% else %}
+      {{ empty_state("没有匹配的单据", "调整筛选条件，或创建第一张入库/出库草稿。", "/documents/new?doc_type=INBOUND", "新建入库") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

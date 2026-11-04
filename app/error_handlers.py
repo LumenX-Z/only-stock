@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -54,6 +54,21 @@ def register_error_handlers(app: FastAPI) -> None:
             exc.status_code,
             extra={"request_id": request_id},
         )
+        if _is_page_request(request):
+            if exc.code == "UNAUTHORIZED":
+                return _page_login_redirect(request)
+            if exc.code == "PASSWORD_CHANGE_REQUIRED":
+                return RedirectResponse(url="/change-password", status_code=303)
+            from app.pages.templating import render_error_page
+
+            return render_error_page(
+                request,
+                status_code=exc.status_code,
+                code=exc.code,
+                message=exc.message,
+                request_id=request_id,
+                details={"resource": exc.resource, "items": list(exc.items)},
+            )
         return JSONResponse(
             status_code=exc.status_code,
             content=error_payload(
@@ -77,6 +92,17 @@ def register_error_handlers(app: FastAPI) -> None:
             request.url.path,
             extra={"request_id": request_id},
         )
+        if _is_page_request(request):
+            from app.pages.templating import render_error_page
+
+            return render_error_page(
+                request,
+                status_code=422,
+                code="VALIDATION_ERROR",
+                message="请求参数校验失败",
+                request_id=request_id,
+                details={"resource": None, "items": items},
+            )
         return JSONResponse(
             status_code=422,
             content=error_payload(
@@ -113,6 +139,16 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         status_code = exc.status_code
+        if _is_page_request(request):
+            from app.pages.templating import render_error_page
+
+            return render_error_page(
+                request,
+                status_code=status_code,
+                code=_HTTP_CODES.get(status_code, "HTTP_ERROR"),
+                message=_HTTP_MESSAGES.get(status_code, "请求失败"),
+                request_id=_request_id(request),
+            )
         return JSONResponse(
             status_code=status_code,
             content=error_payload(
@@ -130,6 +166,16 @@ def register_error_handlers(app: FastAPI) -> None:
             request.url.path,
             extra={"request_id": _request_id(request)},
         )
+        if _is_page_request(request):
+            from app.pages.templating import render_error_page
+
+            return render_error_page(
+                request,
+                status_code=500,
+                code="INTERNAL_ERROR",
+                message="服务器内部错误",
+                request_id=_request_id(request),
+            )
         return _internal_error(_request_id(request))
 
 
@@ -152,6 +198,32 @@ def _internal_error(request_id: str) -> JSONResponse:
         ),
         headers={"X-Request-ID": request_id},
     )
+
+
+_PAGE_EXCLUDED_PREFIXES = (
+    "/api/",
+    "/auth/",
+    "/health/",
+    "/mcp",
+    "/static/",
+    "/openapi.json",
+    "/docs",
+    "/redoc",
+)
+
+
+def _is_page_request(request: Request) -> bool:
+    if not getattr(request.app.state, "pages_enabled", False):
+        return False
+    path = request.url.path
+    return not path.startswith(_PAGE_EXCLUDED_PREFIXES)
+
+
+def _page_login_redirect(request: Request) -> RedirectResponse:
+    next_url = request.url.path
+    if request.url.query:
+        next_url = f"{next_url}?{request.url.query}"
+    return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
 
 
 def _request_id(request: Request) -> str:

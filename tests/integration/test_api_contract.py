@@ -19,8 +19,7 @@ from app.modules.audit.models import AuditLog
 from tests.conftest import MasterDataFixture
 from tests.support import create_document, csrf, inbound_payload, line, submit_document
 
-# docs/10 8.3、8.4 与 docs/11 8.5 声明的全部操作；`/backups` 随 T8.7/T9.4
-# 的备份实现加入。路径参数名不参与 URL 契约比较。
+# docs/10 8.3、8.4 与 docs/11 8.5 声明的全部操作；路径参数名不参与 URL 契约比较。
 DOCUMENTED_OPERATIONS: dict[str, set[str]] = {
     "/auth/login": {"post"},
     "/auth/logout": {"post"},
@@ -66,6 +65,7 @@ DOCUMENTED_OPERATIONS: dict[str, set[str]] = {
     "/api/v1/inventory": {"get"},
     "/api/v1/inventory/transactions": {"get"},
     "/api/v1/audit-logs": {"get"},
+    "/api/v1/backups": {"get", "post"},
     "/health/live": {"get"},
     "/health/ready": {"get"},
 }
@@ -83,6 +83,7 @@ LIST_PATHS = [
     "/api/v1/inventory",
     "/api/v1/inventory/transactions",
     "/api/v1/audit-logs",
+    "/api/v1/backups",
 ]
 
 PUBLIC_OPERATIONS = {"/auth/login", "/health/live", "/health/ready"}
@@ -100,6 +101,7 @@ SORT_RESOURCES = {
     "/api/v1/inventory": "inventory",
     "/api/v1/inventory/transactions": "inventory_transaction",
     "/api/v1/audit-logs": "audit_log",
+    "/api/v1/backups": "backup",
 }
 
 
@@ -218,6 +220,7 @@ def test_openapi_declares_unified_errors_security_and_request_id(
         "xlsx",
         "inventory",
         "audit",
+        "backups",
     }
     for tag in schema["tags"]:
         assert tag["description"]

@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state, error_panel, active_badge with context %}
+
+{% block title %}{{ resource.label }}管理{% endblock %}
+{% block page_title %}{{ resource.label }}管理{% endblock %}
+{% block page_subtitle %}<p>{{ resource.description }}</p>{% endblock %}
+{% block page_actions %}
+{% if can_manage %}
+<button class="button" type="button" onclick="document.getElementById('create-{{ resource.path }}').scrollIntoView({behavior:'smooth'})">{{ icon("plus") }} 新建{{ resource.label }}</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="stack">
+  {{ error_panel(error, "操作未完成") }}
+
+  <section class="card">
+    <form class="filter-bar" method="get" action="/masterdata/{{ resource.path }}">
+      <div class="field">
+        <label for="code_filter">编码</label>
+        <input class="input input-sm" id="code_filter" name="code" value="{{ filters.code or '' }}" placeholder="精确编码">
+      </div>
+      <div class="field grow">
+        <label for="name_filter">名称</label>
+        <input class="input input-sm" id="name_filter" name="name" value="{{ filters.name or '' }}" placeholder="精确名称">
+      </div>
+      {% if resource.key == "material" %}
+      <div class="field">
+        <label for="category_filter">分类</label>
+        <select class="select input-sm" id="category_filter" name="category_id">
+          <option value="">全部分类</option>
+          {% for category in all_categories %}
+          <option value="{{ category.id }}" {{ 'selected' if filters.category_id == category.id }}>{{ category_path(category, categories) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <label class="checkbox-row">
+        <input type="checkbox" name="include_inactive" value="1" {{ 'checked' if filters.include_inactive }}>
+        含已停用
+      </label>
+      <div class="form-actions">
+        <button class="button button-sm" type="submit">{{ icon("search") }} 筛选</button>
+        <a class="button button-ghost button-sm" href="/masterdata/{{ resource.path }}">重置</a>
+      </div>
+    </form>
+
+    {% if rows %}
+    <div class="table-wrap">
+      {% if resource.key == "category" %}
+      <table class="table">
+        <thead>
+          <tr><th>编码</th><th>名称</th><th>层级</th><th>状态</th><th>下级阻碍</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for category in rows %}
+          <tr id="category-{{ category.id }}" class="{{ 'is-muted' if not category.is_active }}">
+            <td><span class="code-chip">{{ category.code }}</span></td>
+            <td class="cell-strong">{{ category.name }}</td>
+            <td><span class="badge badge-neutral badge-plain">一级</span></td>
+            <td>{{ active_badge(category.is_active) }}</td>
+            <td>
+              {% set items = blockers.get(category.id | string, []) %}
+              {% if items %}
+              <details class="blocker-details">
+                <summary><span class="badge badge-warning">{{ items | length }} 项未停用</span></summary>
+                <ul class="blocker-list">
+                  {% for item in items %}
+                  <li>
+                    {% if item.kind == "category" %}
+                    <a href="#category-{{ item.id }}">子分类 {{ item.code }} · {{ item.name }}</a>
+                    {% else %}
+                    <a href="/masterdata/materials?category_id={{ category.id }}">物资 {{ item.code }} · {{ item.name }}</a>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ul>
+                <div class="hint">需先自底向上停用下级资料，页面不提供级联停用。</div>
+              </details>
+              {% else %}
+              <span class="muted">无</span>
+              {% endif %}
+            </td>
+            <td class="cell-actions">
+              <div class="actions">
+                {% if category.is_active %}
+                  {% if items %}
+                  <button class="button button-soft-danger button-sm" type="button" disabled title="请先停用未启用的下级资料">停用</button>
+                  {% else %}
+                  <form method="post" action="/masterdata/{{ resource.path }}/{{ category.id }}/disable" data-confirm="确定停用分类“{{ category.name }}”？停用后可随时重新启用，不影响历史单据与库存。">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button class="button button-soft-danger button-sm" type="submit">停用</button>
+                  </form>
+                  {% endif %}
+                {% else %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ category.id }}/enable">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-secondary button-sm" type="submit">启用</button>
+                </form>
+                {% endif %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ category.id }}/delete" data-confirm="确定删除分类“{{ category.name }}”？删除后不可恢复；存在子分类、物资或历史引用时会被拒绝。">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-ghost button-sm" type="submit">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% for child in category.children %}
+          <tr id="category-{{ child.id }}" class="{{ 'is-muted' if not child.is_active }}">
+            <td><span class="code-chip">{{ child.code }}</span></td>
+            <td class="cell-strong" style="padding-left: 36px">
+              <span class="muted" style="margin-right: 8px">└</span>{{ child.name }}
+              <div class="hint">所属一级分类：{{ category.name }}</div>
+            </td>
+            <td><span class="badge badge-neutral badge-plain">二级</span></td>
+            <td>{{ active_badge(child.is_active) }}</td>
+            <td>
+              {% set child_items = blockers.get(child.id | string, []) %}
+              {% if child_items %}
+              <details class="blocker-details">
+                <summary><span class="badge badge-warning">{{ child_items | length }} 项未停用</span></summary>
+                <ul class="blocker-list">
+                  {% for item in child_items %}
+                  <li><a href="/masterdata/materials?category_id={{ child.id }}">物资 {{ item.code }} · {{ item.name }}</a></li>
+                  {% endfor %}
+                </ul>
+                <div class="hint">需先停用该分类下的物资。</div>
+              </details>
+              {% else %}
+              <span class="muted">无</span>
+              {% endif %}
+            </td>
+            <td class="cell-actions">
+              <div class="actions">
+                {% if child.is_active %}
+                  {% if child_items %}
+                  <button class="button button-soft-danger button-sm" type="button" disabled title="请先停用该分类下的物资">停用</button>
+                  {% else %}
+                  <form method="post" action="/masterdata/{{ resource.path }}/{{ child.id }}/disable" data-confirm="确定停用分类“{{ child.name }}”？停用后可随时重新启用，不影响历史单据与库存。">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <button class="button button-soft-danger button-sm" type="submit">停用</button>
+                  </form>
+                  {% endif %}
+                {% else %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ child.id }}/enable">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-secondary button-sm" type="submit">启用</button>
+                </form>
+                {% endif %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ child.id }}/delete" data-confirm="确定删除分类“{{ child.name }}”？删除后不可恢复；存在物资或历史引用时会被拒绝。">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-ghost button-sm" type="submit">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>编码</th><th>名称</th>
+            {% if resource.key == "warehouse" %}<th>位置</th>{% endif %}
+            {% if resource.key == "material" %}<th>所属分类</th><th>单位</th><th>数量类型</th>{% endif %}
+            <th>状态</th><th>创建时间</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr class="{{ 'is-muted' if not row.is_active }}">
+            <td><span class="code-chip">{{ row.code }}</span></td>
+            <td class="cell-strong">{{ row.name }}</td>
+            {% if resource.key == "warehouse" %}<td class="soft">{{ row.location or "—" }}</td>{% endif %}
+            {% if resource.key == "material" %}
+            <td>
+              {% set category = material_categories.get(row.id | string) %}
+              {{ category_path(category, categories) }}
+            </td>
+            <td>{{ row.unit }}</td>
+            <td>{% if row.quantity_type == "INTEGER" %}<span class="badge badge-neutral badge-plain">整数</span>{% else %}<span class="badge badge-info badge-plain">小数</span>{% endif %}</td>
+            {% endif %}
+            <td>{{ active_badge(row.is_active) }}</td>
+            <td class="muted nowrap">{{ local_time(row.created_at, tz) }}</td>
+            <td class="cell-actions">
+              <div class="actions">
+                {% if row.is_active %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ row.id }}/disable" data-confirm="确定停用{{ resource.label }}“{{ row.name }}”？停用后可随时重新启用，不影响历史单据与库存。">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-soft-danger button-sm" type="submit">停用</button>
+                </form>
+                {% else %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ row.id }}/enable">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-secondary button-sm" type="submit">启用</button>
+                </form>
+                {% endif %}
+                <form method="post" action="/masterdata/{{ resource.path }}/{{ row.id }}/delete" data-confirm="确定删除{{ resource.label }}“{{ row.name }}”？删除后不可恢复；存在历史引用时会被拒绝。">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-ghost button-sm" type="submit">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+    {{ pagination(page, page_size, total) }}
+    {% else %}
+      {{ empty_state("暂无" ~ resource.label, "调整筛选条件或新建一条记录。", "#create-" ~ resource.path, "新建" ~ resource.label) }}
+    {% endif %}
+  </section>
+
+  {% if can_manage %}
+  <section class="card" id="create-{{ resource.path }}">
+    <div class="card-head">
+      <h2>新建{{ resource.label }}</h2>
+      <div class="card-sub">系统自动生成编码，表单不提供编码输入。</div>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/masterdata/{{ resource.path }}" class="form-grid">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="field">
+          <label for="name">名称</label>
+          <input class="input" id="name" name="name" value="{{ form.get('name', '') }}" required maxlength="100" placeholder="请输入{{ resource.label }}名称">
+          {% if resource.key == "category" %}
+          <span class="hint">一级名称全表唯一；二级名称在同一父级下唯一，请勿与同名节点混淆。</span>
+          {% elif resource.key == "material" %}
+          <span class="hint">名称在直接所属分类内唯一；停用记录仍占用名称。</span>
+          {% else %}
+          <span class="hint">名称全表唯一；仅去除首尾空白，大小写敏感。</span>
+          {% endif %}
+        </div>
+
+        {% if resource.key == "warehouse" %}
+        <div class="field">
+          <label for="location">位置</label>
+          <input class="input" id="location" name="location" value="{{ form.get('location', '') }}" maxlength="200" placeholder="可选，例如 A 区 3 号库">
+        </div>
+        {% endif %}
+
+        {% if resource.key == "category" %}
+        <div class="field">
+          <label for="parent_id">父分类</label>
+          <select class="select" id="parent_id" name="parent_id">
+            <option value="">创建一级分类</option>
+            {% for category in category_options %}
+            {% if category.level == 1 %}
+            <option value="{{ category.id }}" {{ 'selected' if form.get('parent_id') == category.id }}>{{ category.label }}（{{ category.code }}）</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+          <span class="hint">二级分类必须选择已启用的一级分类。</span>
+        </div>
+        {% endif %}
+
+        {% if resource.key == "material" %}
+        <div class="field">
+          <label for="category_id">所属分类</label>
+          <select class="select" id="category_id" name="category_id" required>
+            <option value="">请选择一级或二级分类</option>
+            {% for category in category_options %}
+            <option value="{{ category.id }}" {{ 'selected' if form.get('category_id') == category.id }}>{{ category.label }}（{{ category.code }}）</option>
+            {% endfor %}
+          </select>
+          <span class="hint">二级分类会显示所属一级分类，避免同名歧义。</span>
+        </div>
+        <div class="field">
+          <label for="unit">单位</label>
+          <input class="input" id="unit" name="unit" value="{{ form.get('unit', '') }}" required maxlength="20" placeholder="例如 千克、个、根">
+        </div>
+        <div class="field">
+          <label for="quantity_type">数量类型</label>
+          <select class="select" id="quantity_type" name="quantity_type" required>
+            <option value="DECIMAL" {{ 'selected' if form.get('quantity_type', 'DECIMAL') == "DECIMAL" }}>小数（步长 0.001）</option>
+            <option value="INTEGER" {{ 'selected' if form.get('quantity_type') == "INTEGER" }}>整数（步长 1）</option>
+          </select>
+        </div>
+        {% endif %}
+
+        <div class="form-actions span-2">
+          <button class="button" type="submit">{{ icon("plus") }} 创建{{ resource.label }}</button>
+        </div>
+      </form>
+    </div>
+  </section>
+  {% else %}
+  <div class="alert alert-info">
+    <div class="alert-icon">i</div>
+    <div class="alert-body">
+      <div class="alert-title">只读视图</div>
+      <div class="alert-detail">库存操作员可以查询基础资料，但不能创建、修改、停用或删除。</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

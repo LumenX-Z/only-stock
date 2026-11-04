@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import doc_status, doc_type, empty_state, role_label with context %}
+
+{% block title %}工作台{% endblock %}
+{% block page_title %}工作台{% endblock %}
+{% block page_subtitle %}<p>今天也把库存与单据保持在可控状态。</p>{% endblock %}
+{% block page_actions %}
+<a class="button" href="/documents/new?doc_type=INBOUND">{{ icon("plus") }} 新建入库</a>
+<a class="button button-secondary" href="/documents/new?doc_type=OUTBOUND">{{ icon("plus") }} 新建出库</a>
+{% endblock %}
+
+{% block content %}
+<div class="stack">
+  <section class="hero">
+    <h2>{{ auth.user.display_name }}，欢迎回来</h2>
+    <p>当前以{{ role_label(auth.user.role) }}身份登录。所有库存变更都通过单据提交完成，草稿不会计入库存。</p>
+    <div class="hero-actions">
+      <a class="button" href="/documents">查看单据</a>
+      <a class="button button-secondary" href="/inventory">查询库存</a>
+      {% if auth.user.role == "COMPANY_ADMIN" %}
+      <a class="button button-secondary" href="/users">管理用户</a>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="grid grid-4">
+    <div class="stat-card">
+      <div class="stat-label">启用物资</div>
+      <div class="stat-value">{{ stats.materials }}</div>
+      <div class="stat-note">可在入库单中选择</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">启用仓库</div>
+      <div class="stat-value">{{ stats.warehouses }}</div>
+      <div class="stat-note">库存按仓库与物资汇总</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">草稿单据</div>
+      <div class="stat-value">{{ stats.drafts }}</div>
+      <div class="stat-note">草稿不计入库存</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">已生效单据</div>
+      <div class="stat-value">{{ stats.posted }}</div>
+      <div class="stat-note">含历史与已软删除单据</div>
+    </div>
+  </section>
+
+  <section class="grid grid-3">
+    <div class="card" style="grid-column: span 2">
+      <div class="card-head">
+        <h2>最近单据</h2>
+        <div class="card-actions"><a class="button button-ghost button-sm" href="/documents">全部单据</a></div>
+      </div>
+      {% if recent_documents %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>单号</th><th>类型</th><th>状态</th><th>仓库</th><th>创建人</th><th>时间</th></tr>
+          </thead>
+          <tbody>
+            {% for document in recent_documents %}
+            <tr>
+              <td><a class="mono" href="/documents/{{ document.id }}">{{ document.doc_no }}</a></td>
+              <td>{{ doc_type(document) }}</td>
+              <td>{{ doc_status(document) }}</td>
+              <td>{{ document.warehouse_name }}</td>
+              <td>{{ document.created_by_name }}</td>
+              <td class="muted nowrap">{{ local_time(document.created_at, tz) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        {{ empty_state("还没有单据", "从新建入库或出库开始第一笔业务。", "/documents/new?doc_type=INBOUND", "新建入库") }}
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>快捷入口</h2></div>
+      <div class="card-body stack" style="gap: 10px">
+        <a class="button button-secondary button-block" href="/documents/new?doc_type=INBOUND">新建入库单</a>
+        <a class="button button-secondary button-block" href="/documents/new?doc_type=OUTBOUND">新建出库单</a>
+        <a class="button button-secondary button-block" href="/inventory">实时库存</a>
+        <a class="button button-secondary button-block" href="/api-keys">我的 API Key</a>
+        {% if auth.user.role == "COMPANY_ADMIN" %}
+        <div class="divider"></div>
+        <a class="button button-secondary button-block" href="/audit">审计日志</a>
+        <a class="button button-secondary button-block" href="/backups">备份管理</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+<div class="line-balance" {% if item %}data-available="{{ item.balance_milli }}"{% endif %}>
+  {% if item %}
+  可用量 <strong>{{ item.balance_milli | quantity }}</strong> {{ item.unit }}
+  {% else %}
+  选择仓库与物资后显示可用量
+  {% endif %}
+</div>

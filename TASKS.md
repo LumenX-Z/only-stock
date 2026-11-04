@@ -566,37 +566,37 @@ uv run pytest tests/security tests/integration -k "mcp or api_key"
   - 产出：完整 OpenAPI；统一分页、筛选、排序白名单、错误结构、`request_id` 语义。
   - 完成：路径/输入输出/权限与文档一致；错误 `details` 统一；OpenAPI 可生成且实现一致。
 
-- [ ] **T8.2 基础布局与导航**
+- [x] **T8.2 基础布局与导航**
   - 依据：[12-页面与交互要求.md](docs/12-页面与交互要求.md) 第 9 章。
   - 产出：登录态布局、角色可见导航、分页/错误/空状态组件；HTMX 局部交互。
   - 完成：无权限入口隐藏但后端仍校验；列表分页；错误不只显示“服务器错误”。
 
-- [ ] **T8.3 登录、用户与基础资料页面**
+- [x] **T8.3 登录、用户与基础资料页面**
   - 依据：[12-页面与交互要求.md](docs/12-页面与交互要求.md)；[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md) 8.4。
   - 产出：登录/首次改密、用户管理、仓库/部门/项目/厂家/分类/物资页面；创建表单无 `code` 输入。
   - 完成：名称冲突就地回显；分类停用显示阻碍项并自底向上操作；启用上级未启用提示并跳转；`code` 只读展示。
 
-- [ ] **T8.4 单据、库存与软删除页面**
+- [x] **T8.4 单据、库存与软删除页面**
   - 依据：[12-页面与交互要求.md](docs/12-页面与交互要求.md)；[11-单据与库存业务API.md](docs/11-单据与库存业务API.md) 8.5。
   - 产出：单据列表/新建/编辑/详情/提交/软删除、库存与流水页面；项目逐行选择；出库可用量提示。
   - 完成：草稿标识“不计入库存”；提交二次确认；库存不足定位明细；创建成功但提交失败展示草稿及复用 `request_id`。
 
-- [ ] **T8.5 XLSX 快速录入 UI**
+- [x] **T8.5 XLSX 快速录入 UI**
   - 依据：[12-页面与交互要求.md](docs/12-页面与交互要求.md) 第 9 章；[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.4。
   - 产出：新建页模板下载/上传；非空表单确认替换；成功/部分/失败状态；错误摘要；保存/提交人工按钮。
   - 完成：解析不自动保存/提交；已有草稿编辑页无入口；部分填入显著提示；不生成错误报告。
 
-- [ ] **T8.6 API Key 与账户安全页面**
+- [x] **T8.6 API Key 与账户安全页面**
   - 依据：[12-页面与交互要求.md](docs/12-页面与交互要求.md)；[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.5。
   - 产出：“我的 API Key”页面、创建后一次性明文展示、吊销确认、MCP 地址/配置示例。
   - 完成：只能管理本人 Key；刷新/离开不可恢复明文；提示改密/角色变化/禁用会撤销 Key；不展示真实 Key。
 
-- [ ] **T8.7 审计与备份页面**
+- [x] **T8.7 审计与备份页面**
   - 依据：[12-页面与交互要求.md](docs/12-页面与交互要求.md)；[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md) 8.4。
   - 产出：审计查询页、手动备份与备份状态页；CA 权限。
   - 完成：操作员不可见/不可调用；备份失败明确展示，不以“已执行”代替成功。
 
-- [ ] **T8.8 端到端与权限回归**
+- [x] **T8.8 端到端与权限回归**
   - 依据：[15-测试方案.md](docs/15-测试方案.md) 12.1；[16-验收标准.md](docs/16-验收标准.md) 13.1、13.5。
   - 产出：登录→初始化→建用户→建资料→入库→出库→停用/启用→软删除→API Key 主路径；CA/OP 交叉权限。
   - 完成：`uv run pytest tests/e2e` 通过；越权路径全部被拒绝；页面关键提示符合文档。
@@ -786,4 +786,12 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | T7.8 | `uv run pytest tests/unit/test_mcp_contract.py tests/unit/test_mcp_rate_limit.py -q`（19 passed）；`uv run pytest tests/integration/test_mcp_documents.py -q`（14 passed）；`uv run pytest tests/integration/test_mcp_tools.py -q`（12 passed） | 通过：成功结果同时返回 `structuredContent` 与兼容 JSON 文本；失败返回 `isError=true`，`structuredContent.error` 固定含 `code`/`message`/`request_id`/`details`；`details` 递归剔除 `id`、`*_id`、`deleted_by` 及 UUID 值，保留业务 `code`/`doc_no`/名称；`request_id` 由服务端每次 `tools/call` 生成 UUIDv4，只出现在错误、日志与审计，不出现在成功结果；MCP 写操作审计 `source=MCP` 且记录 `api_key_id`，查询工具不逐条写业务审计 | 依据 `docs/08` 8.6.5、`docs/04` 5.6、`docs/09` 8.1、`docs/16` ACC-MCP-011/013；`document_create` 输出额外 `deduplicated` 布尔字段 |
 | 2026-11-04 | T7.9 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security tests/integration -k "mcp or api_key" -q`（48 passed，170 deselected） | 通过：标准 MCP 客户端初始化/会话/工具调用、12/7 工具清单、两种角色交叉越权、分页与 `code`/`doc_no` 单条定位、输出字段白名单、直接提交回滚、300 秒去重、Key/IP 限流、Origin/Host、请求体/响应体大小、会话凭证绑定与日志脱敏全部覆盖；测试使用 `tmp_path` 独立数据库与备份目录 | 依据 `docs/16` 13.9、`docs/15` 12.1；新增 `tests/mcp_support.py` 提供标准协议客户端与无内部 ID 递归断言 |
 | 2026-11-04 | P7 门禁 | `uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/security tests/integration -k "mcp or api_key"`；另执行 `uv run pytest -q` | 通过：Ruff 0 告警、177 个文件格式一致；P7 门禁 48 passed、170 deselected；全量 472 passed | 依据 `TASKS.md` P7 阶段门禁；未新增迁移、未修改 `docs/` 产品规则；MCP 与 HTTP 同应用、同端口、单 worker，无独立 MCP 服务或旧版 HTTP+SSE |
-| 2026-11-04 | T8.1 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/integration/test_api_contract.py -q`（22 passed）；`uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest -q`（499 passed） | 通过：OpenAPI 与 docs/10 8.3/8.4、docs/11 8.5 的路径/方法逐项一致（46 个路径、57 个操作），声明 `sessionCookie` 安全方案、写操作 `X-CSRF-Token`、`X-Request-ID` 响应头和统一 `ErrorResponse`（`details` 必含 `resource`/`items`）；12 个列表接口统一 `page`/`page_size`/`sort`/`order`，默认 1/20、上限 100，非法排序字段返回 422 `VALIDATION_ERROR` 且列白名单，非法方向返回 422；docs/09 8.1 排序白名单与默认方向逐项生效（含分类同级、单据、库存、流水、审计、用户、API Key）；错误 `details` 在 401/404/405/409/422 下均为对象；创建单据沿用客户端 `request_id`（响应头、错误、重放与冲突一致），其他 API 请求与审计使用服务端 UUID | 依据 `docs/09` 8.1/8.2、`docs/10` 8.3/8.4、`docs/11` 8.5、`docs/16` ACC-API-001/002/009；新增 `app/api/` 公共契约组件与 `tests/integration/test_api_contract.py`。`/api/v1/backups` 属于 T8.7/T9.4 的备份实现，当前未注册，OpenAPI 契约测试同步排除并随该任务补齐 |
+| 2026-11-04 | T8.1 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/integration/test_api_contract.py -q`（22 passed）；`uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest -q`（499 passed） | 通过：OpenAPI 与 docs/10 8.3/8.4、docs/11 8.5 的路径/方法逐项一致（47 个路径、59 个操作），声明 `sessionCookie` 安全方案、写操作 `X-CSRF-Token`、`X-Request-ID` 响应头和统一 `ErrorResponse`（`details` 必含 `resource`/`items`）；12 个列表接口统一 `page`/`page_size`/`sort`/`order`，默认 1/20、上限 100，非法排序字段返回 422 `VALIDATION_ERROR` 且列白名单，非法方向返回 422；docs/09 8.1 排序白名单与默认方向逐项生效（含分类同级、单据、库存、流水、审计、用户、API Key）；错误 `details` 在 401/404/405/409/422 下均为对象；创建单据沿用客户端 `request_id`（响应头、错误、重放与冲突一致），其他 API 请求与审计使用服务端 UUID | 依据 `docs/09` 8.1/8.2、`docs/10` 8.3/8.4、`docs/11` 8.5、`docs/16` ACC-API-001/002/009；新增 `app/api/` 公共契约组件与 `tests/integration/test_api_contract.py`。T8.1 完成时 `/api/v1/backups` 尚未注册；T8.7 已补齐备份 API，契约测试现覆盖 47 个路径、59 个操作 |
+| 2026-11-04 | T8.2 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_auth.py -q`（3 passed）；`uv run pytest tests/e2e/test_pages_main_path.py -q`（1 passed） | 通过：新增现代化登录态布局、分组侧栏、角色可见导航、用户菜单/退出、Flash、分页/空状态/错误组件；未登录跳转登录，首次登录强制改密后回工作台；CA 可见用户/审计/备份，OP 入口隐藏且直接访问返回 403；自定义确认对话框保留提交按钮语义；HTMX 局部库存提示可用；错误页展示错误码、消息、请求标识与明细，不再只显示“服务器错误” | 依据 `docs/12` 9.1、9.2、9.9、9.10；新增 `app/templates/base.html`、`app/static/app.css`、`app/static/app.js`、本地固定版本 `app/static/htmx.min.js` 与 `app/pages/` 公共渲染/认证/CSRF 组件 |
+| 2026-11-04 | T8.3 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_masterdata.py tests/e2e/test_pages_users.py -q`（5 passed） | 通过：登录/首次改密、用户创建/编辑/禁用/重置密码与最后管理员保护；六类基础资料页面创建、列表与只读编码；创建表单无 `code` 输入；名称冲突就地回显冲突记录编码、名称与启用状态；分类停用前显示未停用子分类/物资阻碍项、禁用按钮并自底向上操作；启用上级未启用时提示并提供跳转上级分类入口；`code` 只在列表只读展示 | 依据 `docs/12` 9.2、9.6、9.8、9.16、9.17，`docs/10` 8.4；新增 `app/pages/users_pages.py`、`app/pages/masterdata_pages.py`、`app/templates/users/`、`app/templates/masterdata/` |
+| 2026-11-04 | T8.4 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_documents.py tests/e2e/test_pages_permissions.py -q`（4 passed） | 通过：单据列表/新建/编辑/详情/提交/删除草稿/软删除、库存与流水页面；逐行项目与备注、应用到全部、入库厂家必填、出库无厂家输入；草稿标识“不计入库存”，提交二次确认；库存不足返回明细行号与最新可用量；创建成功但提交失败展示草稿与原因并可复用原单重试；操作员不能编辑/删除他人草稿、不能软删除他人已生效单据，可管理本人草稿；HTMX 出库可用量提示 | 依据 `docs/12` 9.3–9.7、9.9、9.15、9.16，`docs/11` 8.5；新增 `app/pages/document_pages.py`、`app/pages/inventory_pages.py`、`app/pages/partials.py` 与对应模板 |
+| 2026-11-04 | T8.5 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_documents.py::test_xlsx_parse_fills_form_without_creating_documents -q`（1 passed） | 通过：新建页提供模板下载、文件选择、5 MiB/2,000 行提示和手工保存/提交按钮；解析前对非空表单确认、提交期间禁用按钮；成功整体替换表头与明细、部分填入显示显著提示、错误摘要展示 Excel 行号/字段/错误码/原因、失败保留原表单内容；解析前后单据数不变；草稿编辑页无 XLSX 入口；不生成错误报告 | 依据 `docs/12` 9.11–9.14，`docs/07` 7.8.4；复用 `parse_document_entry` 与新增 `app/modules/xlsx/uploads.py`，解析结果仅用于当前页面 |
+| 2026-11-04 | T8.6 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_system.py::test_api_key_page_displays_secret_once_and_revokes tests/e2e/test_pages_permissions.py::test_api_key_list_is_scoped_to_current_user -q`（2 passed） | 通过：“我的 API Key”对两种角色开放且只列本人 Key；创建后完整 Key 仅显示一次，刷新同一一次性地址提示已不可恢复，列表只显示末四位；吊销二次确认且已吊销不恢复；页面展示 MCP 地址与占位符 Bearer 示例、改密/角色变化/禁用撤销提示、最多 10 把有效 Key 与内网 HTTP 风险；不展示真实 Key、无角色选择或管理他人入口 | 依据 `docs/12` 9.18、9.19，`docs/04` 5.5；新增 `app/pages/api_key_pages.py`、`app/templates/api_keys/list.html` 与进程内一次性密钥存储 |
+| 2026-11-04 | T8.7 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_system.py tests/integration/test_backups_api.py -q`（6 passed） | 通过：审计页仅 CA 可用，支持对象/动作/来源/日期筛选、分页与变更快照；备份页仅 CA 可用，手动创建在线备份集、展示时间/状态/大小/SHA-256/完整性结果；备份失败返回明确错误并记录失败集，不以“已执行”代替成功；新增 `GET/POST /api/v1/backups`，OP 调用返回 403；备份集含 `inventory.sqlite3`、`manifest.json`、`integrity-report.json`，`integrity_check=ok`，成功集按保留数量清理 | 依据 `docs/12` 9.1、9.2、9.9，`docs/10` 8.4，`docs/13` 10.6；新增 `app/modules/backups/service.py`、`router.py`、`schemas.py`、`app/pages/audit_backup_pages.py` 与模板 |
+| 2026-11-04 | T8.8 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e -q`（16 passed）；`uv run pytest tests/security -q`（44 passed） | 通过：覆盖登录→强制改密→建用户→建六类资料→入库→出库→停用/启用→软删除→API Key 主路径；CA/OP 交叉权限（管理页面、基础资料写操作、单据本人/他人、API Key 隔离）全部被正确拒绝或允许；页面关键提示（不计入库存、提交确认、库存不足行号、部分填入、阻碍项、一次性 Key、备份失败）符合文档 | 依据 `docs/15` 12.1，`docs/16` 13.1、13.5；新增 `tests/e2e/` 6 个测试文件与 `tests/page_support.py` |
+| 2026-11-04 | P8 门禁 | `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/e2e`；`uv run pytest tests/security`；另执行 `uv run pytest -q` | 通过：Ruff 0 告警、210 个文件格式一致；e2e 16 passed；security 44 passed；全量 536 passed | 依据 `TASKS.md` P8 阶段门禁；页面与 API 共用服务层和权限组件，页面路由不进入 OpenAPI；新增备份 API 后 OpenAPI 契约测试 23 passed；未放宽既有安全与库存约束 |

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state with context %}
+
+{% block title %}库存流水{% endblock %}
+{% block page_title %}库存流水{% endblock %}
+{% block page_subtitle %}<p>只显示有效单据（已生效且未软删除）的逐行流水。</p>{% endblock %}
+{% block page_actions %}<a class="button button-secondary" href="/inventory">{{ icon("inventory") }} 返回库存</a>{% endblock %}
+
+{% block content %}
+<div class="stack">
+  <section class="card">
+    <form class="filter-bar" method="get" action="/inventory/transactions">
+      <div class="field">
+        <label for="warehouse_id">仓库</label>
+        <select class="select input-sm" id="warehouse_id" name="warehouse_id">
+          <option value="">全部仓库</option>
+          {% for warehouse in warehouses %}
+          <option value="{{ warehouse.id }}" {{ 'selected' if filters.warehouse_id == warehouse.id }}>{{ warehouse.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="material_id">物资</label>
+        <select class="select input-sm" id="material_id" name="material_id">
+          <option value="">全部物资</option>
+          {% for material in materials %}
+          <option value="{{ material.id }}" {{ 'selected' if filters.material_id == material.id }}>{{ material.name }}（{{ material.code }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="project_id">项目</label>
+        <select class="select input-sm" id="project_id" name="project_id">
+          <option value="">全部项目</option>
+          {% for project in projects %}
+          <option value="{{ project.id }}" {{ 'selected' if filters.project_id == project.id }}>{{ project.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="department_id">部门</label>
+        <select class="select input-sm" id="department_id" name="department_id">
+          <option value="">全部部门</option>
+          {% for department in departments %}
+          <option value="{{ department.id }}" {{ 'selected' if filters.department_id == department.id }}>{{ department.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="start_date">开始日期</label>
+        <input class="input input-sm" id="start_date" name="start_date" type="date" value="{{ filters.start_date }}">
+      </div>
+      <div class="field">
+        <label for="end_date">结束日期</label>
+        <input class="input input-sm" id="end_date" name="end_date" type="date" value="{{ filters.end_date }}">
+      </div>
+      <div class="form-actions">
+        <button class="button button-sm" type="submit">{{ icon("search") }} 筛选</button>
+        <a class="button button-ghost button-sm" href="/inventory/transactions">重置</a>
+      </div>
+    </form>
+
+    {% if items %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>生效时间</th><th>单号</th><th>方向</th><th>仓库</th><th>物资</th><th>项目</th><th>部门</th><th style="text-align:right">数量</th></tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="muted nowrap">{{ local_time(item.submitted_at, tz) }}</td>
+            <td><a class="mono" href="/documents/{{ item.document_id }}">{{ item.doc_no }}</a></td>
+            <td>{% if item.doc_type == "INBOUND" %}<span class="badge badge-info">入库</span>{% else %}<span class="badge badge-purple">出库</span>{% endif %}</td>
+            <td>{{ item.warehouse_name }}</td>
+            <td><span class="cell-strong">{{ item.material_name }}</span><div class="hint mono">{{ item.material_code }}</div></td>
+            <td>{{ item.project_name or "—" }}</td>
+            <td>{{ item.department_name }}</td>
+            <td class="num" style="text-align:right; font-weight: 650">{{ item.quantity_milli | quantity }} {{ item.unit }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page, page_size, total) }}
+    {% else %}
+      {{ empty_state("没有匹配的流水", "调整筛选条件，或先提交一张出入库单。", "/documents", "查看单据") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

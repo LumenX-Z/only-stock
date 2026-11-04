@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state, error_panel, role_label with context %}
+
+{% block title %}用户管理{% endblock %}
+{% block page_title %}用户管理{% endblock %}
+{% block page_subtitle %}<p>仅公司管理员可创建、修改、禁用用户或重置密码。</p>{% endblock %}
+
+{% block content %}
+<div class="stack">
+  {{ error_panel(error, "创建用户失败") }}
+
+  <section class="card">
+    <form class="filter-bar" method="get" action="/users">
+      <div class="field">
+        <label for="role_filter">角色</label>
+        <select class="select" id="role_filter" name="role">
+          <option value="">全部角色</option>
+          {% for role in roles %}
+          <option value="{{ role.value }}" {{ 'selected' if filters.role == role.value }}>{{ role_label(role.value) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="status_filter">状态</label>
+        <select class="select" id="status_filter" name="status">
+          <option value="">全部状态</option>
+          {% for state in statuses %}
+          <option value="{{ state.value }}" {{ 'selected' if filters.status == state.value }}>{{ "启用" if state.value == "ACTIVE" else "已禁用" }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field grow">
+        <label for="login_filter">登录名</label>
+        <input class="input" id="login_filter" name="login_name" value="{{ filters.login_name }}" placeholder="精确匹配登录名">
+      </div>
+      <div class="form-actions">
+        <button class="button" type="submit">{{ icon("search") }} 筛选</button>
+        <a class="button button-ghost" href="/users">重置</a>
+      </div>
+    </form>
+
+    {% if users %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>登录名</th><th>显示名</th><th>角色</th><th>状态</th><th>创建时间</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td class="cell-strong mono">{{ user.login_name }}</td>
+            <td>{{ user.display_name }}</td>
+            <td><span class="role-badge">{{ role_label(user.role) }}</span></td>
+            <td>
+              {% if user.status == "ACTIVE" %}<span class="badge badge-success">启用</span>
+              {% else %}<span class="badge badge-neutral">已禁用</span>{% endif %}
+            </td>
+            <td class="muted nowrap">{{ local_time(user.created_at, tz) }}</td>
+            <td class="cell-actions">
+              <div class="actions">
+                <a class="button button-ghost button-sm" href="/users/{{ user.id }}/edit">编辑</a>
+                {% if user.status == "ACTIVE" %}
+                <form method="post" action="/users/{{ user.id }}/disable" data-confirm="确定禁用用户 {{ user.login_name }}？其会话和 API Key 会立即撤销。">
+                  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                  <button class="button button-soft-danger button-sm" type="submit">禁用</button>
+                </form>
+                {% endif %}
+                <details class="inline-details">
+                  <summary class="button button-secondary button-sm">重置密码</summary>
+                  <form class="inline-reset" method="post" action="/users/{{ user.id }}/reset-password" data-confirm="确定重置 {{ user.login_name }} 的密码？该用户所有会话和 API Key 会被撤销。">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                    <input class="input input-sm" type="password" name="new_password" minlength="12" required placeholder="新密码（至少 12 位）">
+                    <button class="button button-sm" type="submit">确认重置</button>
+                  </form>
+                </details>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page, page_size, total) }}
+    {% else %}
+      {{ empty_state("没有匹配的用户", "调整筛选条件，或在右侧创建新用户。") }}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>创建用户</h2>
+      <div class="card-sub">登录名创建后不可修改；初始密码至少 12 位。</div>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/users" class="form-grid">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="field">
+          <label for="login_name">登录名</label>
+          <input class="input" id="login_name" name="login_name" value="{{ form.login_name or '' }}" required maxlength="64" placeholder="例如 zhangsan">
+          <span class="hint">登录名不区分大小写，创建后不可修改。</span>
+        </div>
+        <div class="field">
+          <label for="display_name">显示名</label>
+          <input class="input" id="display_name" name="display_name" value="{{ form.display_name or '' }}" required maxlength="100" placeholder="例如 张三">
+        </div>
+        <div class="field">
+          <label for="role">角色</label>
+          <select class="select" id="role" name="role">
+            <option value="OPERATOR" {{ 'selected' if form.role == "OPERATOR" }}>库存操作员</option>
+            <option value="COMPANY_ADMIN" {{ 'selected' if form.role == "COMPANY_ADMIN" }}>公司管理员</option>
+          </select>
+          <span class="hint" id="role-hint"></span>
+        </div>
+        <div class="field">
+          <label for="initial_password">初始密码</label>
+          <input class="input" id="initial_password" name="initial_password" type="password" required minlength="12" maxlength="256" autocomplete="new-password">
+          <span class="hint">首次登录时系统会强制要求修改。</span>
+        </div>
+        <div class="form-actions span-2">
+          <button class="button" type="submit">{{ icon("plus") }} 创建用户</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import pagination, empty_state with context %}
+
+{% block title %}实时库存{% endblock %}
+{% block page_title %}实时库存{% endblock %}
+{% block page_subtitle %}<p>库存按“仓库 + 物资”汇总，只统计已生效且未软删除的单据。</p>{% endblock %}
+{% block page_actions %}
+<a class="button button-secondary" href="/inventory/transactions">{{ icon("audit") }} 查看流水</a>
+{% endblock %}
+
+{% block content %}
+<div class="stack">
+  <section class="card">
+    <form class="filter-bar" method="get" action="/inventory">
+      <div class="field">
+        <label for="warehouse_id">仓库</label>
+        <select class="select input-sm" id="warehouse_id" name="warehouse_id">
+          <option value="">全部仓库</option>
+          {% for warehouse in warehouses %}
+          <option value="{{ warehouse.id }}" {{ 'selected' if filters.warehouse_id == warehouse.id }}>{{ warehouse.name }}（{{ warehouse.code }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="material_id">物资</label>
+        <select class="select input-sm" id="material_id" name="material_id">
+          <option value="">全部物资</option>
+          {% for material in materials %}
+          <option value="{{ material.id }}" {{ 'selected' if filters.material_id == material.id }}>{{ material.name }}（{{ material.code }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="code">编码</label>
+        <input class="input input-sm" id="code" name="code" value="{{ filters.code }}" placeholder="精确物资编码">
+      </div>
+      <div class="field grow">
+        <label for="name">名称</label>
+        <input class="input input-sm" id="name" name="name" value="{{ filters.name }}" placeholder="精确物资名称">
+      </div>
+      <label class="checkbox-row">
+        <input type="checkbox" name="include_zero" value="1" {{ 'checked' if filters.include_zero }}>
+        含零库存
+      </label>
+      <div class="form-actions">
+        <button class="button button-sm" type="submit">{{ icon("search") }} 筛选</button>
+        <a class="button button-ghost button-sm" href="/inventory">重置</a>
+      </div>
+    </form>
+
+    {% if items %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>仓库</th><th>物资编码</th><th>物资名称</th><th>数量类型</th><th style="text-align:right">可用量</th></tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td><span class="cell-strong">{{ item.warehouse_name }}</span><div class="hint mono">{{ item.warehouse_code }}</div></td>
+            <td><span class="code-chip">{{ item.material_code }}</span></td>
+            <td class="cell-strong">{{ item.material_name }}</td>
+            <td>{% if item.quantity_type == "INTEGER" %}<span class="badge badge-neutral badge-plain">整数</span>{% else %}<span class="badge badge-info badge-plain">小数</span>{% endif %}</td>
+            <td class="num" style="text-align:right; font-weight: 650">{{ item.balance_milli | quantity }} {{ item.unit }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page, page_size, total) }}
+    {% else %}
+      {{ empty_state("没有匹配的库存记录", "调整筛选条件，或先创建并提交入库单。", "/documents/new?doc_type=INBOUND", "新建入库") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

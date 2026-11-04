@@ -476,6 +476,18 @@ def _ensure_can_disable(session: Session, spec: EntitySpec, row: object) -> None
     raise AppError(code, message, status_code=409, resource="category", items=items)
 
 
+def category_disable_blockers(session: Session, category: Category) -> list[dict[str, object]]:
+    """页面预检：返回分类停用前必须处理的未停用子分类与物资。"""
+    if category.level != CATEGORY_LEVEL_ONE:
+        materials = _active_materials(session, category)
+        return [_blocker_item("material", material) for material in materials]
+    active_children = _active_children(session, category)
+    active_materials = _active_materials(session, category)
+    return [_blocker_item("category", child) for child in active_children] + [
+        _blocker_item("material", material) for material in active_materials
+    ]
+
+
 def _ensure_category_deletable(session: Session, category: Category) -> None:
     children = list(
         session.scalars(select(Category).where(Category.parent_id == category.id)).all()

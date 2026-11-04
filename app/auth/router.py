@@ -13,14 +13,14 @@ from sqlalchemy.orm import Session
 
 from app.api.listing import ListQuery
 from app.api.responses import COMMON_ERROR_RESPONSES, error_response
-from app.auth.account import authenticate_and_create_session, change_password
+from app.auth.account import change_password
 from app.auth.api_keys import (
     create_api_key,
     list_api_keys,
     revoke_api_key,
 )
 from app.auth.dependencies import AuthContext, get_auth_context, require_password_changed
-from app.auth.login_names import validate_login_name
+from app.auth.login import login as perform_login
 from app.auth.schemas import (
     ApiKeyCreated,
     ApiKeyCreateRequest,
@@ -34,8 +34,6 @@ from app.auth.schemas import (
 from app.auth.sessions import clear_session_cookie, revoke_session, set_session_cookie
 from app.db.database import get_session
 from app.db.types import utc_now
-from app.errors import AppError
-from app.modules.audit.service import record_audit
 from app.modules.users.models import User
 from app.request_context import get_request_id
 
@@ -60,50 +58,23 @@ def login(
     payload: LoginRequest,
     request: Request,
     response: Response,
-    session: Annotated[Session, Depends(get_session)],
 ) -> IdentityResponse:
     settings = request.app.state.settings
     limiter = request.app.state.runtime.login_rate_limiter
     ip = request.client.host if request.client else "unknown"
-    login_name = validate_login_name(payload.login_name)
 
-    retry_after = limiter.check(ip, login_name)
-    if retry_after is not None:
-        raise AppError(
-            "RATE_LIMITED",
-            "登录尝试过于频繁，请稍后重试",
-            status_code=429,
-            resource="login",
-            items=[{"retry_after_seconds": retry_after}],
-        )
-
-    try:
-        credentials, user = authenticate_and_create_session(
-            request.app.state.runtime.session_factory,
-            settings,
-            login_name,
-            payload.password,
-            now=utc_now(),
-        )
-    except AppError as error:
-        if error.code == "INVALID_CREDENTIALS":
-            limiter.record_failure(ip, login_name)
-        raise
-
-    limiter.reset(ip, login_name)
-    record_audit(
-        session,
-        actor_user_id=user.id,
-        action="LOGIN_SUCCEEDED",
-        entity_type="user",
-        entity_id=user.id,
-        after={"id": user.id, "login_name": user.login_name, "role": user.role},
+    result = perform_login(
+        request.app.state.runtime.session_factory,
+        settings,
+        limiter,
+        ip=ip,
+        login_name=payload.login_name,
+        password=payload.password,
         request_id=get_request_id(),
         source="API",
     )
-    session.commit()
-    set_session_cookie(response, credentials.raw_token)
-    return _identity(user, credentials.csrf_token)
+    set_session_cookie(response, result.credentials.raw_token)
+    return _identity(result.user, result.credentials.csrf_token)
 
 
 @auth_router.post("/logout", status_code=204)

@@ -52,6 +52,30 @@ def get_auth_context(
     session: Annotated[Session, Depends(get_session)],
     _session_cookie: Annotated[str | None, Security(SESSION_COOKIE_SCHEME)] = None,
 ) -> AuthContext:
+    auth = _authenticate(request, response, session)
+    if request.method in _UNSAFE_METHODS and not verify_csrf(
+        auth.session, request.headers.get(CSRF_HEADER_NAME)
+    ):
+        raise AppError(
+            "CSRF_INVALID",
+            "CSRF 校验失败",
+            status_code=403,
+            resource="session",
+        )
+    return auth
+
+
+def get_page_auth_context(
+    request: Request,
+    response: Response,
+    session: Annotated[Session, Depends(get_session)],
+    _session_cookie: Annotated[str | None, Security(SESSION_COOKIE_SCHEME)] = None,
+) -> AuthContext:
+    """页面认证只校验会话；CSRF 由页面依赖读取表单隐藏字段校验。"""
+    return _authenticate(request, response, session)
+
+
+def _authenticate(request: Request, response: Response, session: Session) -> AuthContext:
     raw_token = request.cookies.get(SESSION_COOKIE_NAME)
     if not raw_token:
         raise _unauthorized()
@@ -73,16 +97,6 @@ def get_auth_context(
             "账户不可用",
             status_code=403,
             resource="user",
-        )
-
-    if request.method in _UNSAFE_METHODS and not verify_csrf(
-        authenticated.session, request.headers.get(CSRF_HEADER_NAME)
-    ):
-        raise AppError(
-            "CSRF_INVALID",
-            "CSRF 校验失败",
-            status_code=403,
-            resource="session",
         )
 
     session.commit()

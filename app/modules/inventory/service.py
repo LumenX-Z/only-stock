@@ -62,6 +62,7 @@ class InventoryRow:
 @dataclass(frozen=True, slots=True)
 class TransactionRow:
     line_id: str
+    document_id: str
     line_no: int
     doc_no: str
     doc_type: str
@@ -388,6 +389,7 @@ def list_transactions(
     rows = session.execute(
         select(
             StockDocumentLine.id.label("line_id"),
+            StockDocumentLine.document_id.label("document_id"),
             StockDocumentLine.line_no.label("line_no"),
             StockDocument.doc_no.label("doc_no"),
             StockDocument.doc_type.label("doc_type"),
@@ -423,6 +425,7 @@ def list_transactions(
     items = [
         TransactionRow(
             line_id=str(row.line_id),
+            document_id=str(row.document_id),
             line_no=int(row.line_no),
             doc_no=str(row.doc_no),
             doc_type=str(row.doc_type),

@@ -403,32 +403,32 @@ uv run pytest tests/concurrency -k "submit or stock"
 
 补齐已生效单据软删除、项目/资料停用启用对单据的影响，以及负库存、余额上限和故障回滚的完整边界。
 
-- [ ] **T5.1 已生效单据软删除**
+- [x] **T5.1 已生效单据软删除**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.5。
   - 产出：`POST /documents/{id}/delete`；权限（CA 全部/OP 本人）；`deleted_at`、`deleted_by`；事务内移除本单后重算余额。
   - 完成：软删除后退出库存汇总但保留头/明细/快照；重复删除 409 `DOCUMENT_ALREADY_DELETED`；导致负库存返回 `NEGATIVE_STOCK`；审计同事务。
 
-- [ ] **T5.2 项目停用/启用对单据的约束**
+- [x] **T5.2 项目停用/启用对单据的约束**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.6。
   - 产出：草稿保存/提交逐行校验项目状态；停用项目拒绝并列出项目编码/名称/行号。
   - 完成：历史单据项目字段和快照不变；启用后可再次使用；列表默认只显示启用项目。
 
-- [ ] **T5.3 基础资料停用/启用对单据的影响**
+- [x] **T5.3 基础资料停用/启用对单据的影响**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.6.1；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.7。
   - 产出：仓库、部门、厂家、分类、物资停用/启用与单据保存/提交的联动。
   - 完成：停用资料不能用于新单/提交（分类、物资只影响入库）；出库仍按库存判定；启用只改状态并写审计。
 
-- [ ] **T5.4 余额上限与负库存全链路**
+- [x] **T5.4 余额上限与负库存全链路**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.6；[16-验收标准.md](docs/16-验收标准.md) 13.2、13.3。
   - 产出：提交、软删除、MCP 直接提交共用的余额校验；边界用例。
   - 完成：单行/多行最大数量不溢出；超限/负库存整单回滚；不存在部分成功。
 
-- [ ] **T5.5 故障注入与原子性**
+- [x] **T5.5 故障注入与原子性**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.7；[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md) 11.2。
   - 产出：数据库异常、锁超时、进程终止模拟；事务回滚验证。
   - 完成：不产生半张有效单据；计数器、审计、单据头/明细一致；锁冲突返回明确错误。
 
-- [ ] **T5.6 并发竞争专项**
+- [x] **T5.6 并发竞争专项**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.3 ACC-FLOW-008、009。
   - 产出：并发出库、软删除与提交竞争、并发停用/启用等测试。
   - 完成：最终库存不为负；成功结果唯一且可解释；`tests/concurrency` 全部通过。
@@ -757,3 +757,10 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | T4.8 | `uv run pytest tests/integration/test_documents_api.py -q`（16 passed）；错误响应逐项核对 | 通过：库存不足、余额超限、版本冲突、重复提交、重复软删除、项目停用、请求键冲突、资源停用、权限不足、未认证分别映射 409/409/409/409/409/409/409/409/403/401；422 用于字段与数量校验；所有错误 `details` 均为含 `resource` 与 `items` 的对象；无伪成功 | 依据 `docs/09` 8.1；数据库唯一约束冲突转换为明确业务错误 |
 | 2026-11-04 | T4.9 | `uv run pytest tests/unit tests/integration -q`（291 passed）；`uv run pytest tests/concurrency -k "submit or stock" -q`（4 passed，12 deselected） | 通过：覆盖入库/出库、逐行项目、拆分项目、整数物资、单行最大与余额上限、库存不足整单回滚、并发提交、同 `request_id` 并发重放、单号并发生成与重复提交幂等 | 依据 `docs/16` 13.3，`docs/15` 12.1、12.2；测试使用 `tmp_path` 独立数据库，未读写开发数据库 |
 | 2026-11-04 | P4 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/integration`；`uv run pytest tests/concurrency -k "submit or stock"` | 通过：Ruff 0 告警、142 个文件格式一致；unit+integration 291 passed；concurrency 门禁 4 passed、12 deselected；另执行全量 `uv run pytest -q` 323 passed | 依据 `TASKS.md` P4 阶段门禁；迁移 `0003_stock_documents` 与模型通过 `alembic check`；未修改 `docs/` 产品规则；P3 的两个占位测试已改为使用真实单据表与库存视图 |
+| 2026-11-04 | T5.1 | `uv run pytest tests/integration/test_documents_lifecycle.py -k "soft_delete" -q`（3 passed，6 deselected）；`uv run pytest tests/recovery/test_transaction_recovery.py -k "soft_delete" -q`（1 passed） | 通过：软删除后单据退出库存汇总，单据头、明细、项目快照完整保留；`deleted_at`/`deleted_by` 写入，重复删除 409 `DOCUMENT_ALREADY_DELETED` 且不重复写审计；删除入库导致负库存返回 409 `NEGATIVE_STOCK`，删除标记与审计均不写入；审计失败时删除标记同事务回滚 | 依据 `docs/06` 7.5、`docs/16` ACC-FLOW-004/005/006/007；`POST /documents/{id}/delete` 权限沿用“CA 全部、OP 仅本人” |
+| 2026-11-04 | T5.2 | `uv run pytest tests/integration/test_documents_lifecycle.py -k "project_disable" -q`（1 passed，8 deselected） | 通过：项目停用后草稿保存与提交均返回 409 `PROJECT_INACTIVE`，`details.items` 含行号、项目编码与名称；新建明细同样被拒；项目列表默认不显示停用项，`include_inactive=true` 可查；重新启用后可再次保存、提交；提交后再次停用不改变历史单据项目字段与名称快照；项目停用/启用写审计 | 依据 `docs/06` 7.6、`docs/16` ACC-DATA-008 |
+| 2026-11-04 | T5.3 | `uv run pytest tests/integration/test_documents_lifecycle.py -k "inactive" -q`（4 passed，5 deselected） | 通过：仓库、部门停用后不能用于新建或提交既有草稿；有库存仓库停用返回 409 `WAREHOUSE_HAS_STOCK`；厂家停用后入库新建与提交均返回 `MANUFACTURER_INACTIVE`，启用后恢复；物资停用只拒绝入库，出库仍按库存成功扣减；分类停用（历史遗留状态夹具）返回 `CATEGORY_INACTIVE`，出库不受影响；启用只改状态并写审计，不重算库存、不改历史快照 | 依据 `docs/06` 7.6.1、`docs/05` 6.7、`docs/16` ACC-DATA-013/027 |
+| 2026-11-04 | T5.4 | `uv run pytest tests/integration/test_documents_lifecycle.py -k "balance" -q`（2 passed，7 deselected） | 通过：9 行单行最大数量加 0.009 恰好达到 `MAX_BALANCE_MILLI` 可提交；再加 0.001 返回 409 `BALANCE_LIMIT_EXCEEDED`；10 行单行最大数量合计 9.999e18 超限仍整单拒绝，无 SQLite 整数溢出、无部分写入，失败单据保持 DRAFT 且无提交审计；软删除出库单若移除后余额超上限返回 409 `BALANCE_LIMIT_EXCEEDED`，不写删除标记。超限软删除夹具为历史遗留数据，正常服务路径不可产生 | 依据 `docs/05` 6.6、`docs/16` ACC-DATA-029、ACC-FLOW-007；提交与软删除共用 `ensure_submit_balances`/`ensure_removal_balances`，P7 MCP 直接提交复用同一入口 |
+| 2026-11-04 | T5.5 | `uv run pytest tests/recovery -q`（7 passed） | 通过：创建/提交/软删除阶段注入审计异常均整体回滚，单据头、明细、计数器与审计数量不变；注入非锁数据库异常后提交回滚且单据保持 DRAFT；50ms 写锁超时触发 `DatabaseBusyError`（409 `WRITE_CONFLICT`），释放锁后可安全重试；HTTP 层锁超时返回统一 409 错误体，重试同一 `request_id` 成功且不重复建单；子进程在未提交事务中写入单据头、明细与计数器后被强制终止，重启后无半张单据且计数器未跳跃 | 依据 `docs/06` 7.7、`docs/14` 11.2、`docs/16` ACC-FLOW-009；测试使用 `tmp_path` 独立数据库，未读写开发数据库 |
+| 2026-11-04 | T5.6 | `uv run pytest tests/concurrency -q`（21 passed） | 通过：并发出库只成功一单且余额不为负；软删除入库与出库提交竞争只有一方成功，最终余额为 0 或 2 千分比且无负库存；仓库停用与入库提交竞争恰好一方成功，不出现“仓库已停用但库存非零”；项目停用与提交竞争保持快照且审计/库存一致；并发停用/启用项目最终版本与审计条数等于实际状态变化次数；并发重复软删除只写一次标记与审计 | 依据 `docs/16` 13.3 ACC-FLOW-008/009、`docs/15` 12.1；新增 `tests/concurrency/test_document_races.py`，原有并发出库测试保留 |
+| 2026-11-04 | P5 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/concurrency`；`uv run pytest tests/recovery --collect-only` | 通过：Ruff 0 告警、145 个文件格式一致；concurrency 21 passed；recovery 收集 7 个测试（`7 tests collected`）；另执行全量 `uv run pytest -q` 344 passed | 依据 `TASKS.md` P5 阶段门禁；未修改 `docs/` 产品规则，未修改生产代码；软删除、停用启用与余额校验在 P4 已实现，P5 补齐边界、故障注入与并发专项测试并验证完成标准 |

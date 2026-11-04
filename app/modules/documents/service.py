@@ -8,9 +8,9 @@ docs/05-数据模型与实体约束.md 6.5：
 - 全部业务写入与审计在同一事务内提交，任一步失败整单回滚。
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -29,6 +29,7 @@ from app.modules.documents.fingerprint import compute_request_fingerprint
 from app.modules.documents.inputs import (
     DocumentInput,
     DocumentLineInput,
+    PreparedDocument,
     PreparedLine,
     prepare_document,
     prepare_lines,
@@ -51,6 +52,9 @@ from app.modules.projects.models import Project
 from app.modules.users.models import Role, User
 from app.modules.warehouses.models import Warehouse
 
+MCP_DEDUP_WINDOW_SECONDS = 300
+"""MCP 建单去重窗口：docs/08-MCP服务与工具.md 7.9 第 6 条硬编码为 300 秒。"""
+
 
 @dataclass(frozen=True, slots=True)
 class DocumentRecord:
@@ -59,6 +63,15 @@ class DocumentRecord:
     document: StockDocument
     lines: list[StockDocumentLine]
     replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentCreation:
+    """MCP 建单结果：是否命中 300 秒窗口去重。"""
+
+    document: StockDocument
+    lines: list[StockDocumentLine]
+    deduplicated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +117,7 @@ def create_draft(
     request_id: str,
     timezone: ZoneInfo,
     source: str = CreatedSource.API.value,
+    api_key_id: str | None = None,
     now: datetime | None = None,
 ) -> DocumentRecord:
     """创建普通出入库草稿；同 ``request_id`` 重放返回原单。"""
@@ -120,46 +134,16 @@ def create_draft(
             if existing is not None:
                 return _replay(existing, fingerprint, canonical_request_id)
 
-            warehouse, department = _resolve_header(
-                session, prepared.warehouse_id, prepared.department_id
-            )
-            resolved_lines = _resolve_lines(session, prepared.doc_type, prepared.lines)
-            doc_no = next_doc_no(session, prepared.doc_type, biz_date)
-            document = StockDocument(
-                doc_no=doc_no,
-                doc_type=prepared.doc_type,
-                status=DocStatus.DRAFT.value,
-                warehouse_id=warehouse.id,
-                warehouse_code=warehouse.code,
-                warehouse_name=warehouse.name,
-                department_id=department.id,
-                department_code=department.code,
-                department_name=department.name,
-                created_source=source,
-                request_id=canonical_request_id,
-                request_fingerprint=fingerprint,
-                version=1,
-                created_by=actor.id,
-                created_by_name=actor.display_name,
-                created_at=created_at,
-                updated_at=created_at,
-            )
-            document.lines = [
-                _line_model(resolved, line_no)
-                for line_no, resolved in enumerate(resolved_lines, start=1)
-            ]
-            session.add(document)
-            session.flush()
-            record_audit(
+            document = _build_document(
                 session,
-                actor_user_id=actor.id,
-                action="DOCUMENT_CREATED",
-                entity_type="document",
-                entity_id=document.id,
-                after=_document_snapshot(document),
-                request_id=canonical_request_id,
+                prepared,
+                actor=actor,
                 source=source,
-                now=created_at,
+                request_id=canonical_request_id,
+                fingerprint=fingerprint,
+                created_at=created_at,
+                biz_date=biz_date,
+                api_key_id=api_key_id,
             )
             lines = list(document.lines)
             session.expunge_all()
@@ -172,6 +156,210 @@ def create_draft(
             request_id=canonical_request_id,
             fingerprint=fingerprint,
         )
+
+
+def create_mcp_document(
+    session_factory: sessionmaker[Session],
+    prepare: Callable[[Session], PreparedDocument],
+    *,
+    submit: bool,
+    actor: User,
+    request_id: str,
+    api_key_id: str,
+    timezone: ZoneInfo,
+    now: datetime | None = None,
+) -> DocumentCreation:
+    """MCP 建单：``BEGIN IMMEDIATE`` 内完成编码解析、去重、建单与可选提交。
+
+    依据 docs/08-MCP服务与工具.md 7.9：
+    - ``prepare`` 在同一写事务内把业务编码解析为内部引用并返回规范化输入；
+    - 窗口查询、建单与提交共用一个写事务，命中窗口时原样返回且不写任何记录；
+    - ``submit=true`` 时在同一事务内校验库存并置为 ``POSTED``，失败整单回滚。
+    """
+    created_at = now or utc_now()
+    canonical_request_id = _canonical_request_id(request_id)
+    source = CreatedSource.MCP.value
+    biz_date = created_at.astimezone(timezone).date()
+
+    try:
+        with session_factory() as session, begin_immediate(session):
+            prepared = prepare(session)
+            fingerprint = compute_request_fingerprint(prepared, submit=submit)
+            duplicate = _find_mcp_duplicate(session, actor.id, fingerprint, created_at)
+            if duplicate is not None:
+                lines = list(duplicate.lines)
+                session.expunge_all()
+                return DocumentCreation(document=duplicate, lines=lines, deduplicated=True)
+
+            document = _build_document(
+                session,
+                prepared,
+                actor=actor,
+                source=source,
+                request_id=canonical_request_id,
+                fingerprint=fingerprint,
+                created_at=created_at,
+                biz_date=biz_date,
+                api_key_id=api_key_id,
+            )
+            if submit:
+                _post_document_locked(
+                    session,
+                    document,
+                    actor=actor,
+                    submitted_at=created_at,
+                    request_id=canonical_request_id,
+                    source=source,
+                    api_key_id=api_key_id,
+                )
+            lines = list(document.lines)
+            session.expunge_all()
+            return DocumentCreation(document=document, lines=lines)
+    except IntegrityError as exc:
+        _raise_mcp_integrity_error(exc)
+
+
+def _build_document(
+    session: Session,
+    prepared: PreparedDocument,
+    *,
+    actor: User,
+    source: str,
+    request_id: str,
+    fingerprint: str,
+    created_at: datetime,
+    biz_date: date,
+    api_key_id: str | None = None,
+) -> StockDocument:
+    """在已取得的写事务内解析关联资料、生成单号并写入草稿及创建审计。"""
+    warehouse, department = _resolve_header(session, prepared.warehouse_id, prepared.department_id)
+    resolved_lines = _resolve_lines(session, prepared.doc_type, prepared.lines)
+    doc_no = next_doc_no(session, prepared.doc_type, biz_date)
+    document = StockDocument(
+        doc_no=doc_no,
+        doc_type=prepared.doc_type,
+        status=DocStatus.DRAFT.value,
+        warehouse_id=warehouse.id,
+        warehouse_code=warehouse.code,
+        warehouse_name=warehouse.name,
+        department_id=department.id,
+        department_code=department.code,
+        department_name=department.name,
+        created_source=source,
+        request_id=request_id,
+        request_fingerprint=fingerprint,
+        version=1,
+        created_by=actor.id,
+        created_by_name=actor.display_name,
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    document.lines = [
+        _line_model(resolved, line_no) for line_no, resolved in enumerate(resolved_lines, start=1)
+    ]
+    session.add(document)
+    session.flush()
+    record_audit(
+        session,
+        actor_user_id=actor.id,
+        action="DOCUMENT_CREATED",
+        entity_type="document",
+        entity_id=document.id,
+        after=_document_snapshot(document),
+        request_id=request_id,
+        source=source,
+        api_key_id=api_key_id,
+        now=created_at,
+    )
+    return document
+
+
+def _post_document_locked(
+    session: Session,
+    document: StockDocument,
+    *,
+    actor: User,
+    submitted_at: datetime,
+    request_id: str | None,
+    source: str,
+    api_key_id: str | None = None,
+) -> None:
+    """在已取得的写事务内重新校验并置为 ``POSTED``；库存不足整单回滚。"""
+    before = _document_snapshot(document)
+    warehouse, department = _resolve_header(session, document.warehouse_id, document.department_id)
+    prepared_lines = _prepared_from_existing(document)
+    resolved_lines = _resolve_lines(session, document.doc_type, prepared_lines)
+    totals = _totals_from_resolved(resolved_lines)
+    materials = {line.material.id: line.material for line in resolved_lines}
+    ensure_submit_balances(
+        session,
+        warehouse_id=document.warehouse_id,
+        doc_type=document.doc_type,
+        totals=totals,
+        materials=materials,
+    )
+
+    _apply_header(document, warehouse, department)
+    document.status = DocStatus.POSTED.value
+    document.submitted_by = actor.id
+    document.submitted_by_name = actor.display_name
+    document.submitted_at = submitted_at
+    document.version = int(document.version) + 1
+    document.updated_at = submitted_at
+    session.flush()
+    record_audit(
+        session,
+        actor_user_id=actor.id,
+        action="DOCUMENT_SUBMITTED",
+        entity_type="document",
+        entity_id=document.id,
+        before=before,
+        after=_document_snapshot(document),
+        request_id=request_id,
+        source=source,
+        api_key_id=api_key_id,
+        now=submitted_at,
+    )
+
+
+def _find_mcp_duplicate(
+    session: Session,
+    actor_id: str,
+    fingerprint: str,
+    now: datetime,
+) -> StockDocument | None:
+    """窗口内查询同一创建者、相同指纹且未软删除的 MCP 单据。"""
+    cutoff = now - timedelta(seconds=MCP_DEDUP_WINDOW_SECONDS)
+    return session.scalar(
+        select(StockDocument)
+        .where(
+            StockDocument.created_by == actor_id,
+            StockDocument.created_source == CreatedSource.MCP.value,
+            StockDocument.request_fingerprint == fingerprint,
+            StockDocument.deleted_at.is_(None),
+            StockDocument.created_at >= cutoff,
+        )
+        .order_by(StockDocument.created_at.desc(), StockDocument.doc_no.desc())
+        .limit(1)
+    )
+
+
+def _raise_mcp_integrity_error(exc: IntegrityError) -> None:
+    """把 MCP 建单的唯一约束冲突转换为明确业务错误。"""
+    message = str(exc.orig)
+    if "stock_documents.doc_no" in message:
+        raise AppError(
+            "DOCUMENT_NUMBER_CONFLICT",
+            "单号生成冲突，请重试",
+            status_code=409,
+            resource="document",
+        ) from exc
+    raise AppError(
+        "DOCUMENT_WRITE_CONFLICT",
+        "单据写入冲突，请重试",
+        status_code=409,
+        resource="document",
+    ) from exc
 
 
 def update_draft(
@@ -276,6 +464,7 @@ def submit_document(
     actor: User,
     source: str = CreatedSource.API.value,
     request_id: str | None = None,
+    api_key_id: str | None = None,
     now: datetime | None = None,
 ) -> DocumentRecord:
     """提交任意普通草稿；在写锁内重新校验全部规则与库存。"""
@@ -301,41 +490,14 @@ def submit_document(
             )
         _ensure_version(document, version)
 
-        before = _document_snapshot(document)
-        warehouse, department = _resolve_header(
-            session, document.warehouse_id, document.department_id
-        )
-        prepared_lines = _prepared_from_existing(document)
-        resolved_lines = _resolve_lines(session, document.doc_type, prepared_lines)
-        totals = _totals_from_resolved(resolved_lines)
-        materials = {line.material.id: line.material for line in resolved_lines}
-        ensure_submit_balances(
+        _post_document_locked(
             session,
-            warehouse_id=document.warehouse_id,
-            doc_type=document.doc_type,
-            totals=totals,
-            materials=materials,
-        )
-
-        _apply_header(document, warehouse, department)
-        document.status = DocStatus.POSTED.value
-        document.submitted_by = actor.id
-        document.submitted_by_name = actor.display_name
-        document.submitted_at = submitted_at
-        document.version = int(document.version) + 1
-        document.updated_at = submitted_at
-        session.flush()
-        record_audit(
-            session,
-            actor_user_id=actor.id,
-            action="DOCUMENT_SUBMITTED",
-            entity_type="document",
-            entity_id=document.id,
-            before=before,
-            after=_document_snapshot(document),
+            document,
+            actor=actor,
+            submitted_at=submitted_at,
             request_id=request_id,
             source=source,
-            now=submitted_at,
+            api_key_id=api_key_id,
         )
         lines = list(document.lines)
         session.expunge_all()

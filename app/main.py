@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.routing import Route
 
 from app.auth.router import api_key_router, auth_router
 from app.auth.sessions import purge_expired_sessions
@@ -20,6 +21,7 @@ from app.db.types import utc_now
 from app.error_handlers import register_error_handlers
 from app.health import router as health_router
 from app.logging import configure_logging
+from app.mcp.server import MCP_PATH, build_mcp
 from app.middleware import RequestContextMiddleware
 from app.modules.audit.router import router as audit_router
 from app.modules.documents.router import router as documents_router
@@ -40,6 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     configure_logging()
     runtime = build_runtime(settings)
+    mcp = build_mcp(runtime)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -50,13 +53,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await asyncio.to_thread(_shutdown, runtime)
             raise
         try:
-            yield
+            async with mcp.session_manager.run():
+                yield
         finally:
             await asyncio.to_thread(_shutdown, runtime)
 
     app = FastAPI(title=APP_NAME, version=APP_VERSION, lifespan=lifespan)
     app.state.settings = settings
     app.state.runtime = runtime
+    app.state.mcp = mcp
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
     app.include_router(health_router)
@@ -68,6 +73,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(xlsx_router)
     app.include_router(inventory_router)
     app.include_router(audit_router)
+    # MCP 与页面/API 同应用、同端口、同进程；不注册独立服务或旧版 HTTP+SSE 端点。
+    app.router.routes.append(Route(MCP_PATH, endpoint=mcp.asgi_app))
     return app
 
 

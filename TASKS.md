@@ -1,6 +1,6 @@
 # TASKS.md
 
-> 执行计划版本：1.0 ｜ 更新日期：2026-11-01 ｜ 发布目标：第一阶段发布 0.1.0 版本镜像
+> 执行计划版本：1.0 ｜ 更新日期：2026-11-04 ｜ 发布目标：第一阶段发布 0.1.0 版本镜像
 > 依据：`docs/` 中的文档是唯一事实来源；本文件只拆解实施顺序，不定义产品规则。
 > 环境与命令约束：见 [AGENTS.md](AGENTS.md)。
 
@@ -502,47 +502,47 @@ uv run pytest tests/unit tests/security -k "xlsx or template or export"
 
 在同一 FastAPI 应用挂载标准 MCP Streamable HTTP，完成 12 个工具、动态权限过滤、原子建单和 300 秒去重。
 
-- [ ] **T7.1 挂载 MCP Streamable HTTP**
+- [x] **T7.1 挂载 MCP Streamable HTTP**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 8.6.1；[02-技术架构与代码组织.md](docs/02-技术架构与代码组织.md) 3.1。
   - 产出：官方 MCP Python SDK 挂载 `/mcp`；同应用同端口同进程；协议初始化/会话/通知。
   - 完成：标准客户端可初始化；无独立 MCP 服务/端口；无旧 HTTP+SSE。
 
-- [ ] **T7.2 MCP 认证与传输安全**
+- [x] **T7.2 MCP 认证与传输安全**
   - 依据：[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.5；[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 8.6.1。
   - 产出：Bearer API Key 认证；Key 状态/用户状态校验；Origin/Host 白名单；Key/IP 限流；请求体/响应大小限制。
   - 完成：Cookie 不能代替 Key；无/错/吊销/禁用 Key 401；超限 429；未知 Host/Origin 拒绝；日志不记完整凭证。
 
-- [ ] **T7.3 工具 schema 与动态清单**
+- [x] **T7.3 工具 schema 与动态清单**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 8.6.2。
   - 产出：12 个工具（仓库、部门、厂家、分类、物资、单据六类资源各 `list/create`）；输入输出 schema；`readOnlyHint`/`destructiveHint`。
   - 完成：CA 12 个、OP 7 个；每次 `tools/list` 按当前账号过滤；`tools/call` 再校验，不信任先前清单。
 
-- [ ] **T7.4 查询工具**
+- [x] **T7.4 查询工具**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 8.6.3、8.6.5。
   - 产出：`warehouse_list`、`department_list`、`manufacturer_list`、`category_list`、`material_list`、`document_list`；分页/筛选/单条定位。
   - 完成：基础资料 `code`、单据 `doc_no` 定位；默认只列启用、可含停用；单据返回明细/快照/软删除状态；输出无内部 ID。
 
-- [ ] **T7.5 基础资料新增工具**
+- [x] **T7.5 基础资料新增工具**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 8.6.3；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.2、6.4。
   - 产出：五类 `*_create` 工具；复用普通服务层；系统生成 `code`；分类父级、物资分类/单位/数量类型校验。
   - 完成：创建工具不接受 `code`/`id`/`*_id`；CA 可用、OP 不可见且越权 `FORBIDDEN`；名称/编码唯一与普通 API 一致。
 
-- [ ] **T7.6 `document_create` 与原子直接提交**
+- [x] **T7.6 `document_create` 与原子直接提交**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 7.9、8.6.3；[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.3、7.4。
   - 产出：`submit=false` 建草稿；`submit=true` 同事务完成编码解析、写入、校验、库存、生效、审计。
   - 完成：入库厂家/出库无厂家、逐行项目、数量/库存规则完整；失败回滚不留下草稿；工具不接收 `request_id`。
 
-- [ ] **T7.7 MCP 建单 300 秒去重**
+- [x] **T7.7 MCP 建单 300 秒去重**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 7.9 第 6 条。
   - 产出：规范化 `request_fingerprint`；创建者+指纹+300 秒窗口查询；命中返回原单 `deduplicated=true`。
   - 完成：窗口内不重复建单/审计/计数；窗口外可新建；不同用户隔离；`submit=false/true` 互不去重；软删除单不参与。
 
-- [ ] **T7.8 MCP 输出、审计与错误**
+- [x] **T7.8 MCP 输出、审计与错误**
   - 依据：[08-MCP服务与工具.md](docs/08-MCP服务与工具.md) 8.6.5；[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md) 5.6。
   - 产出：业务编码映射；成功/错误结构化内容；`source=MCP` 审计与 `api_key_id`。
   - 完成：任何结果/错误 `details` 不含内部 UUID；错误 `request_id` 由服务端生成；MCP 查询不逐条业务审计。
 
-- [ ] **T7.9 MCP 协议、权限与故障测试**
+- [x] **T7.9 MCP 协议、权限与故障测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.9；[15-测试方案.md](docs/15-测试方案.md) 12.1。
   - 产出：标准客户端初始化、12/7 工具清单、越权、分页/单条、输出字段白名单、直接提交回滚、去重、限流、Origin/Host 测试。
   - 完成：`uv run pytest tests/security tests/integration -k mcp` 相关用例通过。
@@ -776,3 +776,13 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | T6.7 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security -q`（35 passed）；`uv run pytest tests/unit/test_xlsx_templates.py tests/unit/test_xlsx_parser.py tests/unit/test_xlsx_performance.py tests/security/test_xlsx_security.py tests/integration/test_xlsx_api.py -q`（68 passed） | 通过：覆盖 5 MiB/2,001 行、损坏 ZIP、压缩炸弹、外部链接、宏、表头区缺失/错位、列顺序错误、公式与公式注入、极值精度、备注超长、隐藏行、软删除导出等恶意及边界夹具；所有解析用例前后单据、明细、审计、分类、物资数量一致；未发现 XLSX 直接建单/改单、批次表或错误报告接口 | 依据 `docs/16` 13.8、`docs/15` 12.1/12.2；安全测试不读写开发数据库或真实备份目录 |
 | 2026-11-04 | T6.8 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_xlsx_performance.py -q`（2 passed） | 通过：2,000 行入库文件解析耗时低于 10 秒，SELECT 次数不超过 20（实测远低于阈值，名称解析按项目/厂家/一级分类/二级分类/物资各一次批量查询）；2,000 行单据导出耗时低于 10 秒且生成有效 XLSX；测试使用 `tmp_path` 独立数据库，无内存溢出或逐行重复查询 | 依据 `docs/14` 11.3，`docs/16` ACC-PERF-004；为使 2,000 行单据在受限文件系统上稳定创建，SQLite 每连接增加 `PRAGMA temp_store=MEMORY`，并同步 `docs/02` 3.4 与 `tests/unit/test_sqlite.py` |
 | 2026-11-04 | P6 门禁 | `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/security -k "xlsx or template or export"`；`uv run pytest -q` | 通过：Ruff 0 告警、161 个文件格式一致；P6 门禁 60 passed、182 deselected；全量 418 passed；XLSX 专项 68 passed | 依据 `TASKS.md` P6 阶段门禁；未新增迁移、未新增解析批次/错误行/上传文件表；所有 Python 命令使用 uv，测试使用 `tmp_path` 独立数据库与备份目录 |
+| 2026-11-04 | T7.1 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security/test_mcp_auth.py -q`（9 passed）；`uv run pytest tests/integration/test_mcp_tools.py -q`（12 passed） | 通过：官方 MCP Python SDK 2.3.0 的 Streamable HTTP 挂载在 `/mcp`，与页面/API 同应用、同端口、单进程；标准客户端完成 initialize、`MCP-Session-Id`、`tools/list`、`tools/call`、通知与 DELETE 会话终止；不存在 `/sse`、`/mcp/sse` 旧版端点，OpenAPI 不含 `/mcp` | 依据 `docs/08` 8.6.1、`docs/02` 3.1；`/mcp` 路由直接注册在同一 FastAPI 应用，Streamable HTTP 会话管理器随应用 lifespan 启停 |
+| 2026-11-04 | T7.2 | `uv run pytest tests/security/test_mcp_auth.py -q`（9 passed）；`uv run pytest tests/unit/test_mcp_contract.py tests/unit/test_mcp_rate_limit.py -q`（19 passed，含限流与响应大小用例） | 通过：无 Key、错误 Key、已吊销 Key、禁用用户 Key 均 401 且 `details.resource=api_key`；Cookie 不能代替 Bearer；未知 Host 421、未知 Origin 403、允许 Origin 200；Key 限流 2 次后第 3 次 429 并带 `Retry-After`，IP 限流先于 Key 限流生效；请求体超过 4 MiB 返回 413 `REQUEST_TOO_LARGE`；非流式响应累计超过 4 MiB 被拒绝，流式响应按单个数据块限制并在超限时终止；日志与审计均不含完整 Key；会话仅能被创建它的 Key 使用，换 Key 重放 `MCP-Session-Id` 返回 404 | 依据 `docs/04` 5.5、`docs/08` 8.6.1、`docs/16` ACC-MCP-003/012；认证中间件每次请求重新校验 Key 与账户并用 Key ID 绑定会话，运行日志只记录 Key ID |
+| 2026-11-04 | T7.3 | `uv run pytest tests/unit/test_mcp_contract.py tests/unit/test_mcp_rate_limit.py -q`（19 passed）；`uv run pytest tests/integration/test_mcp_tools.py -q`（12 passed） | 通过：CA `tools/list` 恰为 12 个、OP 恰为六个 `list` 加 `document_create` 共 7 个；每次 `tools/list` 按数据库当前角色过滤，`tools/call` 重新读取账户、Key 与角色；12 个工具输入/输出 schema 顶层为 object 且 `additionalProperties=false`，无 `id`/`*_id`/`request_id` 字段；查询工具 `readOnlyHint=true`、新增工具 false、均 `destructiveHint=false`；`document_create` 描述包含 300 秒去重与 `deduplicated` 且不含 `request_id`；未知工具返回 `TOOL_NOT_FOUND`，OP 调用新增工具返回 `FORBIDDEN` 且无业务写入 | 依据 `docs/08` 8.6.2、8.6.3、`docs/03` 4.2；工具清单不固化在 Key 中 |
+| 2026-11-04 | T7.4 | `uv run pytest tests/integration/test_mcp_tools.py -q`（12 passed） | 通过：六个查询工具支持分页（默认 1/20，最大 100）与名称/类型/状态/仓库/部门/项目/厂家/日期/软删除筛选；基础资料按 `code`、单据按 `doc_no` 精确单条定位并忽略分页与其他筛选；默认只列启用记录，`include_inactive=true` 与 `code` 定位可返回停用记录；分类返回 `parent_code`，物资返回直接分类及父级；单据摘要 `projects` 去重、详情含全部明细/快照/软删除状态；关联筛选编码不存在返回空列表，单条定位不存在返回 `RESOURCE_NOT_FOUND`；输出递归扫描无内部 ID/UUID | 依据 `docs/08` 8.6.3、8.6.5、`docs/16` ACC-MCP-005；查询不写业务审计 |
+| 2026-11-04 | T7.5 | `uv run pytest tests/integration/test_mcp_tools.py -q`（12 passed） | 通过：五类 `*_create` 仅 CA 可见可调用，复用普通服务层生成编码；创建工具不接受 `code`/`id`/`*_id`/UUID/`request_id`，传入返回 `VALIDATION_ERROR`；成功返回系统生成 `code` 且无内部 ID；名称冲突返回 `NAME_CONFLICT`，`details.items` 保留 `code`/`name` 并剔除内部 ID；分类父级不存在返回 `RESOURCE_NOT_FOUND`，一级/二级层级与物资分类、单位、数量类型规则与普通 API 一致；MCP 来源审计记录用户、`source=MCP` 与非敏感 `api_key_id` | 依据 `docs/08` 8.6.3、`docs/05` 6.2/6.4、`docs/04` 5.6、`docs/16` ACC-MCP-006 |
+| 2026-11-04 | T7.6 | `uv run pytest tests/integration/test_mcp_documents.py -q`（14 passed） | 通过：`submit=false` 只建 DRAFT 且库存不变；`submit=true` 在单个 `BEGIN IMMEDIATE` 事务内完成编码解析、写入、提交校验、库存检查、POSTED、生效字段与审计；入库逐行厂家必填、出库携带厂家拒绝、顶层 `project_code` 拒绝、逐行项目有效、数量精度/整数物资规则生效；出库无库存返回 `INSUFFICIENT_STOCK` 且不留下单据、明细、计数器或 MCP 审计，失败后成功单号仍从 `-000001` 开始；注入审计异常时直接提交整体回滚 | 依据 `docs/08` 7.9、8.6.3、`docs/06` 7.3/7.4/7.7、`docs/16` ACC-MCP-007–009；适配层复用 `BEGIN IMMEDIATE`、`_resolve_header`、`_resolve_lines`、`ensure_submit_balances` 与统一审计 |
+| 2026-11-04 | T7.7 | `uv run pytest tests/integration/test_mcp_documents.py -q`（14 passed） | 通过：窗口内相同创建者与规范化指纹再次调用返回同一 `doc_no`、`deduplicated=true`，不新建单据、不重复写审计、不重复计算库存；数量 `1.250`/`1.25` 与备注首尾空白归一为同一指纹；`submit=false` 与 `submit=true` 互不去重；修改备注或换用户均新建；窗口外（301 秒）允许新建；已软删除单不参与匹配；并发相同内容调用恰好一建一去重；窗口常量硬编码 300 秒 | 依据 `docs/08` 7.9 第 6 条、`docs/16` ACC-MCP-010；查询与建单在同一写事务内按 `(created_by, request_fingerprint, created_at)` 索引去重 |
+| 2026-11-04 | T7.8 | `uv run pytest tests/unit/test_mcp_contract.py tests/unit/test_mcp_rate_limit.py -q`（19 passed）；`uv run pytest tests/integration/test_mcp_documents.py -q`（14 passed）；`uv run pytest tests/integration/test_mcp_tools.py -q`（12 passed） | 通过：成功结果同时返回 `structuredContent` 与兼容 JSON 文本；失败返回 `isError=true`，`structuredContent.error` 固定含 `code`/`message`/`request_id`/`details`；`details` 递归剔除 `id`、`*_id`、`deleted_by` 及 UUID 值，保留业务 `code`/`doc_no`/名称；`request_id` 由服务端每次 `tools/call` 生成 UUIDv4，只出现在错误、日志与审计，不出现在成功结果；MCP 写操作审计 `source=MCP` 且记录 `api_key_id`，查询工具不逐条写业务审计 | 依据 `docs/08` 8.6.5、`docs/04` 5.6、`docs/09` 8.1、`docs/16` ACC-MCP-011/013；`document_create` 输出额外 `deduplicated` 布尔字段 |
+| 2026-11-04 | T7.9 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security tests/integration -k "mcp or api_key" -q`（48 passed，170 deselected） | 通过：标准 MCP 客户端初始化/会话/工具调用、12/7 工具清单、两种角色交叉越权、分页与 `code`/`doc_no` 单条定位、输出字段白名单、直接提交回滚、300 秒去重、Key/IP 限流、Origin/Host、请求体/响应体大小、会话凭证绑定与日志脱敏全部覆盖；测试使用 `tmp_path` 独立数据库与备份目录 | 依据 `docs/16` 13.9、`docs/15` 12.1；新增 `tests/mcp_support.py` 提供标准协议客户端与无内部 ID 递归断言 |
+| 2026-11-04 | P7 门禁 | `uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/security tests/integration -k "mcp or api_key"`；另执行 `uv run pytest -q` | 通过：Ruff 0 告警、177 个文件格式一致；P7 门禁 48 passed、170 deselected；全量 472 passed | 依据 `TASKS.md` P7 阶段门禁；未新增迁移、未修改 `docs/` 产品规则；MCP 与 HTTP 同应用、同端口、单 worker，无独立 MCP 服务或旧版 HTTP+SSE |

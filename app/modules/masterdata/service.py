@@ -43,6 +43,7 @@ CATEGORY_ACTIVE_MATERIALS = "CATEGORY_HAS_ACTIVE_MATERIALS"
 class EntityFilters:
     code: str | None = None
     name: str | None = None
+    parent_code: str | None = None
     category_code: str | None = None
     category_id: str | None = None
     is_active: bool | None = None
@@ -57,6 +58,7 @@ def create_entity(
     actor_user_id: str | None,
     request_id: str | None,
     source: str = "API",
+    api_key_id: str | None = None,
     location: str | None = None,
     parent_id: str | None = None,
     category_id: str | None = None,
@@ -110,6 +112,7 @@ def create_entity(
                 after=entity_snapshot(row),
                 request_id=request_id,
                 source=source,
+                api_key_id=api_key_id,
                 now=created_at,
             )
             session.expunge(row)
@@ -317,6 +320,9 @@ def _filter_conditions(spec: EntitySpec, filters: EntityFilters) -> list[object]
         if filters.category_code:
             category_ids = select(Category.id).where(Category.code == filters.category_code.strip())
             conditions.append(model.category_id.in_(category_ids))
+    if spec.key == "category" and filters.parent_code:
+        parent_ids = select(Category.id).where(Category.code == filters.parent_code.strip())
+        conditions.append(Category.parent_id.in_(parent_ids))
     return conditions
 
 

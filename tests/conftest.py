@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth.api_keys import create_api_key
 from app.auth.login_names import validate_login_name
 from app.auth.passwords import hash_password
 from app.config import Settings
@@ -265,6 +266,28 @@ def master_data(
         material_second=material_second,
         material_integer=material_integer,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class MCPAccounts:
+    """MCP 测试所需的两种角色账户与有效 Key。"""
+
+    ca: User
+    op: User
+    ca_key: str
+    op_key: str
+
+
+@pytest.fixture
+def mcp_accounts(
+    session_factory: sessionmaker[Session],
+    user_factory: Callable[..., User],
+) -> MCPAccounts:
+    ca = user_factory("mcp-ca", role=Role.COMPANY_ADMIN, display_name="MCP 管理员")
+    op = user_factory("mcp-op", role=Role.OPERATOR, display_name="MCP 操作员")
+    _, ca_key = create_api_key(session_factory, ca.id, "ca-mcp")
+    _, op_key = create_api_key(session_factory, op.id, "op-mcp")
+    return MCPAccounts(ca=ca, op=op, ca_key=ca_key, op_key=op_key)
 
 
 @pytest.fixture

@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.listing import ListParams, SortOrder, order_by, resolve_sort
 from app.auth.api_keys import (
     REVOKE_REASON_ACCOUNT_DISABLED,
     REVOKE_REASON_ROLE_CHANGED,
@@ -287,6 +288,8 @@ def list_users(
     role: str | None = None,
     status: str | None = None,
     login_name: str | None = None,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[User], int]:
     conditions = []
     if role is not None:
@@ -295,12 +298,27 @@ def list_users(
         conditions.append(User.status == status)
     if login_name:
         conditions.append(User.login_name == normalize_login_lookup(login_name))
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields={
+            "login_name": User.login_name,
+            "display_name": User.display_name,
+            "role": User.role,
+            "status": User.status,
+            "created_at": User.created_at,
+            "updated_at": User.updated_at,
+        },
+        default="created_at",
+        default_order=SortOrder.ASC,
+        resource="user",
+    )
     total = session.scalar(select(func.count()).select_from(User).where(*conditions))
     rows = list(
         session.scalars(
             select(User)
             .where(*conditions)
-            .order_by(User.created_at, User.login_name)
+            .order_by(order_by(column, direction), User.login_name)
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()

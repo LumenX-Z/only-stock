@@ -16,6 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
+from app.api.responses import COMMON_ERROR_RESPONSES
 from app.auth.permissions import RequirePasswordChanged
 from app.db.database import get_session
 from app.modules.documents.models import DocType
@@ -37,7 +38,11 @@ from app.modules.xlsx.templates import (
     template_filenames,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["xlsx"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["xlsx"],
+    responses=COMMON_ERROR_RESPONSES,
+)
 
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _UPLOAD_CHUNK = 1024 * 1024

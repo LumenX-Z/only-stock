@@ -8,7 +8,8 @@
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Request, Response
+from fastapi import Depends, Request, Response, Security
+from fastapi.security import APIKeyCookie
 from sqlalchemy.orm import Session
 
 from app.auth.models import AuthSession
@@ -28,6 +29,14 @@ from app.modules.users.models import User, UserStatus
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
+# 仅用于 OpenAPI 声明会话 Cookie 安全方案；实际读取与校验仍在 get_auth_context。
+SESSION_COOKIE_SCHEME = APIKeyCookie(
+    name=SESSION_COOKIE_NAME,
+    scheme_name="sessionCookie",
+    description="登录成功后由 /auth/login 设置的 HttpOnly 会话 Cookie",
+    auto_error=False,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class AuthContext:
@@ -41,6 +50,7 @@ def get_auth_context(
     request: Request,
     response: Response,
     session: Annotated[Session, Depends(get_session)],
+    _session_cookie: Annotated[str | None, Security(SESSION_COOKIE_SCHEME)] = None,
 ) -> AuthContext:
     raw_token = request.cookies.get(SESSION_COOKIE_NAME)
     if not raw_token:

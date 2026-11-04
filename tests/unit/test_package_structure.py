@@ -4,6 +4,11 @@ import pytest
 
 _MODULES = [
     "app",
+    "app.api",
+    "app.api.listing",
+    "app.api.openapi",
+    "app.api.responses",
+    "app.api.schemas",
     "app.auth",
     "app.auth.account",
     "app.auth.api_keys",

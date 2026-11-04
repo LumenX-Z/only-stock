@@ -8,9 +8,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app.api.listing import ListParams, ListQuery
+from app.api.responses import COMMON_ERROR_RESPONSES
 from app.auth.permissions import CompanyAdmin, RequirePasswordChanged
 from app.db.database import get_session
 from app.modules.categories.models import Category
@@ -42,10 +44,11 @@ from app.modules.masterdata.service import (
 from app.modules.materials.models import Material
 from app.request_context import get_request_id
 
-router = APIRouter(prefix="/api/v1", tags=["master-data"])
-
-PageNumber = Annotated[int, Query(ge=1)]
-PageSize = Annotated[int, Query(ge=1, le=100)]
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["master-data"],
+    responses=COMMON_ERROR_RESPONSES,
+)
 
 
 def _lists(
@@ -58,8 +61,7 @@ def _lists(
     include_inactive: bool,
     category_code: str | None = None,
     category_id: str | None = None,
-    page: int,
-    page_size: int,
+    params: ListParams,
 ) -> tuple[list[object], int]:
     filters = EntityFilters(
         code=code,
@@ -69,7 +71,15 @@ def _lists(
         is_active=is_active,
         include_inactive=include_inactive,
     )
-    return list_entities(session, key, filters=filters, page=page, page_size=page_size)
+    return list_entities(
+        session,
+        key,
+        filters=filters,
+        page=params.page,
+        page_size=params.page_size,
+        sort=params.sort,
+        order=params.order,
+    )
 
 
 # --------------------------------------------------------------------------- 仓库
@@ -79,8 +89,7 @@ def _lists(
 def list_warehouses(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
@@ -93,13 +102,12 @@ def list_warehouses(
         name=name,
         is_active=is_active,
         include_inactive=include_inactive,
-        page=page,
-        page_size=page_size,
+        params=params,
     )
     return WarehouseListResponse(
         items=[WarehouseOut.model_validate(row) for row in rows],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 
@@ -158,8 +166,7 @@ def enable_warehouse(
 def list_departments(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
@@ -172,13 +179,12 @@ def list_departments(
         name=name,
         is_active=is_active,
         include_inactive=include_inactive,
-        page=page,
-        page_size=page_size,
+        params=params,
     )
     return NamedEntityListResponse(
         items=[NamedEntityOut.model_validate(row) for row in rows],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 
@@ -236,8 +242,7 @@ def enable_department(
 def list_projects(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
@@ -250,13 +255,12 @@ def list_projects(
         name=name,
         is_active=is_active,
         include_inactive=include_inactive,
-        page=page,
-        page_size=page_size,
+        params=params,
     )
     return NamedEntityListResponse(
         items=[NamedEntityOut.model_validate(row) for row in rows],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 
@@ -314,8 +318,7 @@ def enable_project(
 def list_manufacturers(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
@@ -328,13 +331,12 @@ def list_manufacturers(
         name=name,
         is_active=is_active,
         include_inactive=include_inactive,
-        page=page,
-        page_size=page_size,
+        params=params,
     )
     return NamedEntityListResponse(
         items=[NamedEntityOut.model_validate(row) for row in rows],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 
@@ -392,8 +394,7 @@ def enable_manufacturer(
 def list_categories(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     code: str | None = None,
     name: str | None = None,
     is_active: bool | None = None,
@@ -405,12 +406,16 @@ def list_categories(
         is_active=is_active,
         include_inactive=include_inactive,
     )
-    roots, total = list_category_tree(session, filters=filters)
-    start = (page - 1) * page_size
+    roots, total = list_category_tree(
+        session, filters=filters, sort=params.sort, order=params.order
+    )
+    start = (params.page - 1) * params.page_size
     return CategoryListResponse(
-        items=[CategoryOut.model_validate(node) for node in roots[start : start + page_size]],
-        page=page,
-        page_size=page_size,
+        items=[
+            CategoryOut.model_validate(node) for node in roots[start : start + params.page_size]
+        ],
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 
@@ -472,8 +477,7 @@ def enable_category(
 def list_materials(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     code: str | None = None,
     name: str | None = None,
     category_code: str | None = None,
@@ -490,8 +494,7 @@ def list_materials(
         include_inactive=include_inactive,
         category_code=category_code,
         category_id=str(category_id) if category_id else None,
-        page=page,
-        page_size=page_size,
+        params=params,
     )
     materials = [row for row in rows if isinstance(row, Material)]
     categories = category_map_for_materials(session, materials)
@@ -499,7 +502,12 @@ def list_materials(
         _material_out(material, categories.get(material.category_id), session)
         for material in materials
     ]
-    return MaterialListResponse(items=items, page=page, page_size=page_size, total=total)
+    return MaterialListResponse(
+        items=items,
+        page=params.page,
+        page_size=params.page_size,
+        total=total,
+    )
 
 
 @router.post("/materials", response_model=MaterialOut, status_code=201)

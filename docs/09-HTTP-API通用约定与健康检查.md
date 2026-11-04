@@ -21,8 +21,24 @@
 - `request_id` 的语义按入口固定，不得在同一请求内混用：Web 页面与 `/api/v1` 创建单据使用客户端 UUID 作为幂等键，重试保持同一值，错误和日志沿用该值；其他 `/api/v1` 请求以及全部 MCP 请求由服务端为每次请求生成，其中 MCP 建单的去重不依赖该值（见[《MCP 服务与工具》7.9](08-MCP服务与工具.md#79-mcp-原子创建并提交)、[8.6.3](08-MCP服务与工具.md#863-查询与新增参数契约)）。
 - `/api/v1` 路径与响应中的 ID 使用 UUID 字符串；MCP 工具不使用内部 ID，规则见[《MCP 服务与工具》8.6.5](08-MCP服务与工具.md#865-输出字段)。时间响应使用 UTC RFC 3339；页面显示为 `Asia/Shanghai`。
 - 数量、可用量均为十进制字符串，禁止科学计数法。
-- 列表默认 `page=1`、`page_size=20`，最大 100；排序字段使用白名单。
+- 列表参数统一为 `page`、`page_size`、`sort`、`order`：`page` 默认 `1`，`page_size` 默认 `20`、最大 `100`；`sort` 只接受下表为该资源声明的白名单字段，缺省使用默认字段；`order` 只接受 `asc` 或 `desc`，缺省使用默认方向。未知 `sort` 返回 422 `VALIDATION_ERROR`，`details.resource` 标识资源，`details.items` 至少包含 `field`、`value` 与 `allowed`；非法 `order` 同样返回 422 `VALIDATION_ERROR`，`details.items` 标明 `field` 与原因。
+- 列表响应统一为 `items`、`page`、`page_size`、`total`；排序必须附带唯一决胜字段，保证翻页结果稳定。
 - 成功创建返回 201；查询和修改返回 200；无内容删除返回 204；失败不返回伪成功。
+- OpenAPI 必须可生成并与实现一致：每个 `/api/v1` 与 `/auth` 操作声明统一错误响应组件 `ErrorResponse`，会话认证声明为 `sessionCookie` 安全方案，写操作声明必需请求头 `X-CSRF-Token`，每个响应声明 `X-Request-ID` 头。
+
+列表排序白名单：
+
+| 接口 | 白名单 `sort` | 默认 `sort` | 默认 `order` |
+| --- | --- | --- | --- |
+| `GET /api/v1/users` | `login_name`、`display_name`、`role`、`status`、`created_at`、`updated_at` | `created_at` | `asc` |
+| `GET /api/v1/api-keys` | `name`、`created_at`、`last_used_at`、`revoked_at` | `created_at` | `desc` |
+| `GET /api/v1/warehouses`、`/departments`、`/projects`、`/manufacturers` | `code`、`name`、`created_at`、`updated_at` | `code` | `asc` |
+| `GET /api/v1/categories` | `code`、`name`、`created_at`、`updated_at` | `code` | `asc` |
+| `GET /api/v1/materials` | `code`、`name`、`created_at`、`updated_at` | `code` | `asc` |
+| `GET /api/v1/documents` | `created_at`、`doc_no`、`submitted_at`、`status`、`doc_type` | `created_at` | `desc` |
+| `GET /api/v1/inventory` | `warehouse_code`、`material_code`、`material_name`、`balance` | `warehouse_code` | `asc` |
+| `GET /api/v1/inventory/transactions` | `submitted_at`、`doc_no`、`line_no`、`material_code`、`quantity` | `submitted_at` | `desc` |
+| `GET /api/v1/audit-logs` | `created_at`、`action`、`entity_type`、`source` | `created_at` | `desc` |
 
 统一错误结构：
 

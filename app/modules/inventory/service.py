@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Integer, String, and_, column, func, select, table, true
 from sqlalchemy.orm import Session
 
+from app.api.listing import ListParams, SortOrder, order_by, resolve_sort
 from app.errors import AppError
 from app.modules.documents.models import DocStatus, DocType, StockDocument, StockDocumentLine
 from app.modules.inventory.quantity import MAX_BALANCE_MILLI, format_quantity_milli
@@ -243,6 +244,8 @@ def list_inventory(
     include_zero: bool = False,
     page: int = 1,
     page_size: int = 20,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[InventoryRow], int]:
     """分页查询实时库存；``include_zero`` 时补齐零余额组合。"""
     conditions: list[object] = []
@@ -293,8 +296,25 @@ def list_inventory(
         )
 
     total = int(session.scalar(select(func.count()).select_from(base.subquery())) or 0)
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields={
+            "warehouse_code": _WAREHOUSES.c.code,
+            "material_code": _MATERIALS.c.code,
+            "material_name": _MATERIALS.c.name,
+            "balance": func.coalesce(INVENTORY_VIEW.c.balance_milli, 0),
+        },
+        default="warehouse_code",
+        default_order=SortOrder.ASC,
+        resource="inventory",
+    )
     rows = session.execute(
-        base.order_by(_WAREHOUSES.c.code, _MATERIALS.c.code)
+        base.order_by(
+            order_by(column, direction),
+            _WAREHOUSES.c.code,
+            _MATERIALS.c.code,
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
@@ -326,6 +346,8 @@ def list_transactions(
     end_before: datetime | None = None,
     page: int = 1,
     page_size: int = 20,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[TransactionRow], int]:
     """分页查询有效单据流水；一张单据按明细行返回。"""
     conditions: list[object] = [
@@ -349,6 +371,20 @@ def list_transactions(
         StockDocument.__table__, StockDocument.id == StockDocumentLine.document_id
     )
     total = int(session.scalar(select(func.count()).select_from(joined).where(*conditions)) or 0)
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields={
+            "submitted_at": StockDocument.submitted_at,
+            "doc_no": StockDocument.doc_no,
+            "line_no": StockDocumentLine.line_no,
+            "material_code": StockDocumentLine.material_code,
+            "quantity": StockDocumentLine.quantity_milli,
+        },
+        default="submitted_at",
+        default_order=SortOrder.DESC,
+        resource="inventory_transaction",
+    )
     rows = session.execute(
         select(
             StockDocumentLine.id.label("line_id"),
@@ -377,7 +413,7 @@ def list_transactions(
         .select_from(joined)
         .where(*conditions)
         .order_by(
-            StockDocument.submitted_at.desc(),
+            order_by(column, direction),
             StockDocument.doc_no.desc(),
             StockDocumentLine.line_no,
         )

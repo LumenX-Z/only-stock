@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.schemas import PageMeta
+
 
 class LoginRequest(BaseModel):
     login_name: str = Field(min_length=1, max_length=128)
@@ -53,8 +55,5 @@ class ApiKeyCreated(ApiKeyMetadata):
     key: str
 
 
-class ApiKeyListResponse(BaseModel):
+class ApiKeyListResponse(PageMeta):
     items: list[ApiKeyMetadata]
-    page: int
-    page_size: int
-    total: int

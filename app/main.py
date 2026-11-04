@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.routing import Route
 
+from app.api.openapi import APP_DESCRIPTION, OPENAPI_TAGS, install_openapi_contract
 from app.auth.router import api_key_router, auth_router
 from app.auth.sessions import purge_expired_sessions
 from app.config import Settings
@@ -58,12 +59,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             await asyncio.to_thread(_shutdown, runtime)
 
-    app = FastAPI(title=APP_NAME, version=APP_VERSION, lifespan=lifespan)
+    app = FastAPI(
+        title=APP_NAME,
+        version=APP_VERSION,
+        description=APP_DESCRIPTION,
+        openapi_tags=OPENAPI_TAGS,
+        lifespan=lifespan,
+    )
     app.state.settings = settings
     app.state.runtime = runtime
     app.state.mcp = mcp
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
+    install_openapi_contract(app)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(api_key_router)

@@ -13,6 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.api.schemas import PageMeta
 from app.modules.documents.models import REMARK_MAX_LENGTH
 
 MAX_REQUEST_LINES = 2000
@@ -117,8 +118,5 @@ class DocumentDetailOut(DocumentSummaryOut):
     lines: list[DocumentLineOut] = Field(default_factory=list)
 
 
-class DocumentListResponse(BaseModel):
+class DocumentListResponse(PageMeta):
     items: list[DocumentSummaryOut]
-    page: int
-    page_size: int
-    total: int

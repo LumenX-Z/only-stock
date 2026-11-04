@@ -10,9 +10,11 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.api.listing import ListQuery
+from app.api.responses import COMMON_ERROR_RESPONSES
 from app.auth.permissions import RequirePasswordChanged
 from app.db.database import get_session
 from app.modules.inventory.quantity import format_quantity_milli
@@ -24,18 +26,18 @@ from app.modules.inventory.schemas import (
 )
 from app.modules.inventory.service import list_inventory, list_transactions, local_day_bounds
 
-router = APIRouter(prefix="/api/v1", tags=["inventory"])
-
-PageNumber = Annotated[int, Query(ge=1)]
-PageSize = Annotated[int, Query(ge=1, le=100)]
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["inventory"],
+    responses=COMMON_ERROR_RESPONSES,
+)
 
 
 @router.get("/inventory", response_model=InventoryListResponse)
 def inventory_endpoint(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     warehouse_id: UUID | None = None,
     material_id: UUID | None = None,
     code: str | None = None,
@@ -49,8 +51,10 @@ def inventory_endpoint(
         code=code,
         name=name,
         include_zero=include_zero,
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
+        sort=params.sort,
+        order=params.order,
     )
     return InventoryListResponse(
         items=[
@@ -67,8 +71,8 @@ def inventory_endpoint(
             )
             for row in rows
         ],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 
@@ -78,8 +82,7 @@ def inventory_transactions_endpoint(
     _auth: RequirePasswordChanged,
     session: Annotated[Session, Depends(get_session)],
     request: Request,
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
+    params: ListQuery,
     warehouse_id: UUID | None = None,
     material_id: UUID | None = None,
     project_id: UUID | None = None,
@@ -98,8 +101,10 @@ def inventory_transactions_endpoint(
         department_id=None if department_id is None else str(department_id),
         start_at=start_at,
         end_before=end_before,
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
+        sort=params.sort,
+        order=params.order,
     )
     return InventoryTransactionsResponse(
         items=[
@@ -129,7 +134,7 @@ def inventory_transactions_endpoint(
             )
             for row in rows
         ],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )

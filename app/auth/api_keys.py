@@ -16,6 +16,7 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.listing import ListParams, SortOrder, order_by, resolve_sort
 from app.auth.models import API_KEY_NAME_MAX_LENGTH, ApiKey
 from app.db.sqlite import begin_immediate
 from app.db.types import utc_now
@@ -133,16 +134,31 @@ def list_api_keys(
     include_revoked: bool,
     page: int,
     page_size: int,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[ApiKey], int]:
     conditions = [ApiKey.user_id == user_id]
     if not include_revoked:
         conditions.append(ApiKey.revoked_at.is_(None))
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields={
+            "name": ApiKey.name,
+            "created_at": ApiKey.created_at,
+            "last_used_at": ApiKey.last_used_at,
+            "revoked_at": ApiKey.revoked_at,
+        },
+        default="created_at",
+        default_order=SortOrder.DESC,
+        resource="api_key",
+    )
     total = session.scalar(select(func.count()).select_from(ApiKey).where(*conditions))
     rows = list(
         session.scalars(
             select(ApiKey)
             .where(*conditions)
-            .order_by(ApiKey.created_at.desc(), ApiKey.id)
+            .order_by(order_by(column, direction), ApiKey.id)
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()

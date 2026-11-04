@@ -8,9 +8,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app.api.listing import ListQuery
+from app.api.responses import COMMON_ERROR_RESPONSES, error_response
 from app.auth.account import authenticate_and_create_session, change_password
 from app.auth.api_keys import (
     create_api_key,
@@ -37,11 +39,23 @@ from app.modules.audit.service import record_audit
 from app.modules.users.models import User
 from app.request_context import get_request_id
 
-auth_router = APIRouter(prefix="/auth", tags=["auth"])
-api_key_router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
+auth_router = APIRouter(
+    prefix="/auth",
+    tags=["auth"],
+    responses=COMMON_ERROR_RESPONSES,
+)
+api_key_router = APIRouter(
+    prefix="/api/v1/api-keys",
+    tags=["api-keys"],
+    responses=COMMON_ERROR_RESPONSES,
+)
 
 
-@auth_router.post("/login", response_model=IdentityResponse)
+@auth_router.post(
+    "/login",
+    response_model=IdentityResponse,
+    responses={429: error_response("登录限流")},
+)
 def login(
     payload: LoginRequest,
     request: Request,
@@ -131,21 +145,22 @@ def change_own_password(
 def get_api_keys(
     auth: Annotated[AuthContext, Depends(require_password_changed)],
     session: Annotated[Session, Depends(get_session)],
+    params: ListQuery,
     include_revoked: bool = False,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ApiKeyListResponse:
     rows, total = list_api_keys(
         session,
         auth.user.id,
         include_revoked=include_revoked,
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
+        sort=params.sort,
+        order=params.order,
     )
     return ApiKeyListResponse(
         items=[ApiKeyMetadata.model_validate(row) for row in rows],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 

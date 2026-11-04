@@ -18,6 +18,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.listing import ListParams, SortOrder, order_by, resolve_sort
 from app.db.sqlite import begin_immediate
 from app.db.types import utc_now
 from app.errors import AppError
@@ -592,6 +593,8 @@ def list_documents(
     filters: DocumentFilters | None = None,
     page: int = 1,
     page_size: int = 20,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[StockDocument], dict[str, list[dict[str, object]]], int]:
     """分页查询单据，并按明细聚合去重项目摘要。"""
     filters = filters or DocumentFilters()
@@ -631,11 +634,25 @@ def list_documents(
     total = int(
         session.scalar(select(func.count()).select_from(StockDocument).where(*conditions)) or 0
     )
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields={
+            "created_at": StockDocument.created_at,
+            "doc_no": StockDocument.doc_no,
+            "submitted_at": StockDocument.submitted_at,
+            "status": StockDocument.status,
+            "doc_type": StockDocument.doc_type,
+        },
+        default="created_at",
+        default_order=SortOrder.DESC,
+        resource="document",
+    )
     rows = list(
         session.scalars(
             select(StockDocument)
             .where(*conditions)
-            .order_by(StockDocument.created_at.desc(), StockDocument.doc_no.desc())
+            .order_by(order_by(column, direction), StockDocument.doc_no.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()

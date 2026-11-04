@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.api.schemas import PageMeta
+
 
 class AuditLogEntry(BaseModel):
     id: str
@@ -20,8 +22,5 @@ class AuditLogEntry(BaseModel):
     created_at: datetime
 
 
-class AuditLogListResponse(BaseModel):
+class AuditLogListResponse(PageMeta):
     items: list[AuditLogEntry]
-    page: int
-    page_size: int
-    total: int

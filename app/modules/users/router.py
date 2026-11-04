@@ -7,12 +7,15 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.api.listing import ListQuery
+from app.api.responses import COMMON_ERROR_RESPONSES
 from app.auth.permissions import CompanyAdmin
 from app.auth.schemas import UserIdentity
 from app.db.database import get_session
+from app.modules.users.models import Role, UserStatus
 from app.modules.users.schemas import (
     UserCreateRequest,
     UserDisableRequest,
@@ -29,34 +32,36 @@ from app.modules.users.service import (
 )
 from app.request_context import get_request_id
 
-router = APIRouter(prefix="/api/v1/users", tags=["users"])
-
-PageNumber = Annotated[int, Query(ge=1)]
-PageSize = Annotated[int, Query(ge=1, le=100)]
+router = APIRouter(
+    prefix="/api/v1/users",
+    tags=["users"],
+    responses=COMMON_ERROR_RESPONSES,
+)
 
 
 @router.get("", response_model=UserListResponse)
 def get_users(
     _auth: CompanyAdmin,
     session: Annotated[Session, Depends(get_session)],
-    page: PageNumber = 1,
-    page_size: PageSize = 20,
-    role: str | None = None,
-    status: str | None = None,
+    params: ListQuery,
+    role: Role | None = None,
+    status: UserStatus | None = None,
     login_name: str | None = None,
 ) -> UserListResponse:
     rows, total = list_users(
         session,
-        page=page,
-        page_size=page_size,
-        role=role,
-        status=status,
+        page=params.page,
+        page_size=params.page_size,
+        role=None if role is None else role.value,
+        status=None if status is None else status.value,
         login_name=login_name,
+        sort=params.sort,
+        order=params.order,
     )
     return UserListResponse(
         items=[UserIdentity.model_validate(row) for row in rows],
-        page=page,
-        page_size=page_size,
+        page=params.page,
+        page_size=params.page_size,
         total=total,
     )
 

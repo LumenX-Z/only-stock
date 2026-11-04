@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.listing import ListParams, SortOrder, order_by, resolve_sort
 from app.db.types import utc_now
 from app.modules.audit.models import AuditLog
 
@@ -66,6 +67,8 @@ def list_audit_logs(
     created_to: datetime | None = None,
     page: int = 1,
     page_size: int = 20,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[AuditLog], int]:
     conditions = []
     if entity_type:
@@ -81,12 +84,25 @@ def list_audit_logs(
     if created_to is not None:
         conditions.append(AuditLog.created_at <= created_to)
 
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields={
+            "created_at": AuditLog.created_at,
+            "action": AuditLog.action,
+            "entity_type": AuditLog.entity_type,
+            "source": AuditLog.source,
+        },
+        default="created_at",
+        default_order=SortOrder.DESC,
+        resource="audit_log",
+    )
     total = session.scalar(select(func.count()).select_from(AuditLog).where(*conditions))
     rows = list(
         session.scalars(
             select(AuditLog)
             .where(*conditions)
-            .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+            .order_by(order_by(column, direction), AuditLog.id.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()

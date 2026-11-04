@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.schemas import PageMeta
+
 
 class _StrictRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -80,29 +82,17 @@ class MaterialOut(NamedEntityOut):
     quantity_type: str
 
 
-class NamedEntityListResponse(BaseModel):
+class NamedEntityListResponse(PageMeta):
     items: list[NamedEntityOut]
-    page: int
-    page_size: int
-    total: int
 
 
-class WarehouseListResponse(BaseModel):
+class WarehouseListResponse(PageMeta):
     items: list[WarehouseOut]
-    page: int
-    page_size: int
-    total: int
 
 
-class CategoryListResponse(BaseModel):
+class CategoryListResponse(PageMeta):
     items: list[CategoryOut]
-    page: int
-    page_size: int
-    total: int
 
 
-class MaterialListResponse(BaseModel):
+class MaterialListResponse(PageMeta):
     items: list[MaterialOut]
-    page: int
-    page_size: int
-    total: int

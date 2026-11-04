@@ -4,6 +4,7 @@ from typing import Literal, Self
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from app.api.schemas import PageMeta
 from app.auth.schemas import UserIdentity
 
 
@@ -42,8 +43,5 @@ class UserResetPasswordRequest(_StrictRequest):
     new_password: str = Field(min_length=1, max_length=256)
 
 
-class UserListResponse(BaseModel):
+class UserListResponse(PageMeta):
     items: list[UserIdentity]
-    page: int
-    page_size: int
-    total: int

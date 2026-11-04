@@ -9,6 +9,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.api.schemas import PageMeta
+
 
 class InventoryItemOut(BaseModel):
     warehouse_id: str
@@ -22,11 +24,8 @@ class InventoryItemOut(BaseModel):
     balance: str
 
 
-class InventoryListResponse(BaseModel):
+class InventoryListResponse(PageMeta):
     items: list[InventoryItemOut]
-    page: int
-    page_size: int
-    total: int
 
 
 class InventoryTransactionOut(BaseModel):
@@ -54,11 +53,8 @@ class InventoryTransactionOut(BaseModel):
     submitted_at: datetime
 
 
-class InventoryTransactionsResponse(BaseModel):
+class InventoryTransactionsResponse(PageMeta):
     items: list[InventoryTransactionOut]
-    page: int
-    page_size: int
-    total: int
 
 
 __all__ = [

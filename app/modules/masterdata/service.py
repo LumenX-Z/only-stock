@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.listing import ListParams, SortOrder, order_by, resolve_sort
 from app.db.sqlite import begin_immediate
 from app.db.types import utc_now
 from app.errors import AppError
@@ -227,18 +228,28 @@ def list_entities(
     filters: EntityFilters | None = None,
     page: int = 1,
     page_size: int = 20,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[object], int]:
-    """分页查询基础资料；默认只显示启用记录。"""
+    """分页查询基础资料；默认只显示启用记录，排序字段限定白名单。"""
     spec = get_spec(key)
     filters = filters or EntityFilters()
     conditions = _filter_conditions(spec, filters)
+    params = ListParams(page=page, page_size=page_size, sort=sort, order=order)
+    column, direction = resolve_sort(
+        params,
+        fields=_entity_sort_fields(spec.model),
+        default="code",
+        default_order=SortOrder.ASC,
+        resource=spec.key,
+    )
 
     total = session.scalar(select(func.count()).select_from(spec.model).where(*conditions))
     rows = list(
         session.scalars(
             select(spec.model)
             .where(*conditions)
-            .order_by(spec.model.code)
+            .order_by(order_by(column, direction), spec.model.id)
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()
@@ -246,13 +257,37 @@ def list_entities(
     return rows, int(total or 0)
 
 
+def _entity_sort_fields(model: type) -> dict[str, object]:
+    return {
+        "code": model.code,
+        "name": model.name,
+        "created_at": model.created_at,
+        "updated_at": model.updated_at,
+    }
+
+
 def list_category_tree(
     session: Session,
     *,
     filters: EntityFilters | None = None,
+    sort: str | None = None,
+    order: SortOrder | None = None,
 ) -> tuple[list[dict[str, object]], int]:
-    """返回一级分类为根的完整树，并保持启用/停用过滤。"""
+    """返回一级分类为根的完整树，并保持启用/停用过滤。
+
+    分页作用于一级分类；排序字段按白名单校验后同时作用于同级节点。
+    """
     filters = filters or EntityFilters()
+    params = ListParams(page=1, page_size=20, sort=sort, order=order)
+    resolve_sort(
+        params,
+        fields=_entity_sort_fields(Category),
+        default="code",
+        default_order=SortOrder.ASC,
+        resource="category",
+    )
+    sort_field = "code" if params.sort is None else params.sort.strip()
+    reverse = params.order == SortOrder.DESC
     conditions = _filter_conditions(get_spec("category"), filters)
     rows = list(
         session.scalars(
@@ -282,10 +317,16 @@ def list_category_tree(
     for parent_id, child_nodes in children.items():
         parent = nodes.get(parent_id)
         if parent is not None:
-            parent["children"] = child_nodes
-            for child in child_nodes:
+            parent["children"] = _sort_nodes(child_nodes, sort_field, reverse)
+            for child in parent["children"]:
                 child["parent_code"] = parent["code"]
-    return roots, len(roots)
+    return _sort_nodes(roots, sort_field, reverse), len(roots)
+
+
+def _sort_nodes(
+    nodes: list[dict[str, object]], field: str, reverse: bool
+) -> list[dict[str, object]]:
+    return sorted(nodes, key=lambda node: (node[field], node["code"]), reverse=reverse)
 
 
 def get_entity(session: Session, key: str, entity_id: str) -> object:

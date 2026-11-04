@@ -35,7 +35,9 @@ class RequestContextMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = int(message["status"])
-                MutableHeaders(scope=message)["X-Request-ID"] = request_id
+                MutableHeaders(scope=message)["X-Request-ID"] = _effective_request_id(
+                    scope, request_id
+                )
             await send(message)
 
         try:
@@ -52,6 +54,13 @@ class RequestContextMiddleware:
                     path,
                     status_code,
                     duration_ms,
-                    extra={"request_id": request_id},
+                    extra={"request_id": _effective_request_id(scope, request_id)},
                 )
             reset_request_id(token)
+
+
+def _effective_request_id(scope: Scope, fallback: str) -> str:
+    """创建单据时端点会用客户端幂等键覆盖请求 ID，错误与日志沿用该值。"""
+    state = scope.get("state") or {}
+    value = state.get("request_id")
+    return str(value) if value else fallback

@@ -343,47 +343,47 @@ uv run pytest tests/concurrency
 
 完成单据草稿、库存视图、入库/出库提交和单据/库存查询，使核心库存业务可用。
 
-- [ ] **T4.1 单据表、明细与约束**
+- [x] **T4.1 单据表、明细与约束**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.5。
   - 产出：`stock_documents`、`stock_document_lines`、`document_counters` 模型与迁移；索引、唯一约束、触发器。
   - 完成：已生效单据/明细禁止更新；软删除字段可用；同物资同项目唯一；至少一行的约束由服务与数据库共同保证。
 
-- [ ] **T4.2 草稿创建、修改、删除与幂等**
+- [x] **T4.2 草稿创建、修改、删除与幂等**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.2。
   - 产出：草稿服务；客户端 `request_id` 幂等；`request_fingerprint` 规范化计算；乐观锁 `version`。
   - 完成：Web/API 重放同 `request_id` 返回原单；同键不同内容 409 `REQUEST_ID_CONFLICT`；草稿不影响库存。
 
-- [ ] **T4.3 明细校验与逐行项目**
+- [x] **T4.3 明细校验与逐行项目**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.3、7.4；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.5。
   - 产出：入库厂家必填、出库无厂家；项目可空且逐行；同物资同项目去重；数量/单位/快照校验。
   - 完成：单据头出现 `project_id` 返回 422；出库带厂家返回 422；停用项目 409 `PROJECT_INACTIVE` 并列行号。
 
-- [ ] **T4.4 库存视图与查询索引**
+- [x] **T4.4 库存视图与查询索引**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.1。
   - 产出：`v_inventory_balance` 或等价查询；仓库+物资汇总；索引与测试查询计划。
   - 完成：草稿/软删除不计入；零余额补齐；项目/部门/厂家筛选不改变库存定义。
 
-- [ ] **T4.5 入库提交事务**
+- [x] **T4.5 入库提交事务**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.3；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.6。
   - 产出：`POST /documents/{id}/submit` 的入库路径；`BEGIN IMMEDIATE`；事务内重算余额上限。
   - 完成：提交成功立即增加库存；超 `MAX_BALANCE_MILLI` 返回 `BALANCE_LIMIT_EXCEEDED` 并整单回滚；已生效不可修改。
 
-- [ ] **T4.6 出库提交事务**
+- [x] **T4.6 出库提交事务**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.4、7.7。
   - 产出：出库提交路径；事务内读取当前余额；按物资汇总拆行数量；负库存拒绝。
   - 完成：可用量等于出库量可提交；不足返回 `INSUFFICIENT_STOCK` 含编码/可用量/请求量；任一行失败整单回滚；并发两单不能都基于旧余额成功。
 
-- [ ] **T4.7 单据与库存查询接口**
+- [x] **T4.7 单据与库存查询接口**
   - 依据：[11-单据与库存业务API.md](docs/11-单据与库存业务API.md) 8.5。
   - 产出：单据分页/详情、修改/删除/提交、库存和流水接口；软删除路径可先留桩，P5 完成；模板下载/XLSX 解析/导出由 P6 接入同一 API 契约。
   - 完成：路径、分页、筛选、权限、示例响应与文档一致；项目按明细返回、`projects` 摘要正确。
 
-- [ ] **T4.8 单据错误与状态码**
+- [x] **T4.8 单据错误与状态码**
   - 依据：[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md) 8.1。
   - 产出：库存不足、版本冲突、重复提交、项目停用、余额超限等错误映射。
   - 完成：409/422/403/401 口径正确；`details` 结构统一；不得伪成功。
 
-- [ ] **T4.9 单据与库存测试**
+- [x] **T4.9 单据与库存测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.3；[15-测试方案.md](docs/15-测试方案.md) 12.1。
   - 产出：入库/出库、拆分项目、边界数量、库存不足、并发提交、幂等重试测试。
   - 完成：`uv run pytest tests/unit tests/integration tests/concurrency` 相关用例通过。
@@ -747,3 +747,13 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-03 | T3.12 | `uv run pytest tests/integration/test_masterdata_api.py tests/integration/test_master_data_migration.py -q` | 通过：30 passed；六类资料 GET/POST/DELETE/停用/启用与审计查询路径齐全；创建请求携带 `code` 返回 422，成功响应返回系统生成 `code`；列表分页、错误 `details.resource/items` 结构、CA/OP 权限与 OpenAPI 一致 | 依据 `docs/10` 8.4、`docs/09` 8.1；六类创建 schema 使用 `extra="forbid"` |
 | 2026-11-03 | T3.13 | `uv run pytest tests/concurrency -q` | 通过：12 passed；覆盖六类并发生成编码、编码序号耗尽、插入失败计数器回滚、并发同名仓库/分类/物资、不同层级同名允许、分类停用与新增物资/启用子类竞争、最后管理员并发保护 | 依据 `docs/16` 13.2，`docs/15` 12.1、12.2；测试使用 `tmp_path` 独立数据库与 Barrier 并发辅助 |
 | 2026-11-03 | P3 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/integration`；`uv run pytest tests/concurrency` | 通过：Ruff 0 告警、124 个文件格式一致；unit+integration 247 passed；concurrency 12 passed；另执行全量 `uv run pytest -q` 275 passed | 依据 `TASKS.md` P3 阶段门禁；迁移 `0002_master_data` 与模型通过 `alembic check`，未修改 `docs/` 产品规则 |
+| 2026-11-04 | T4.1 | `DATA_DIR=/tmp/only-stock-p4-mig BACKUP_DIR=/tmp/only-stock-p4-mig/backups uv run alembic upgrade head`、`alembic downgrade base`、`alembic upgrade head`、`alembic check`；`uv run pytest tests/integration/test_documents_migration.py -q` | 通过：迁移链可正向、回退并再次升级；`alembic check` 输出 `No new upgrade operations detected`；7 passed；`stock_documents`、`stock_document_lines`、`document_counters`、`v_inventory_balance`、状态/仓库/明细/物资/项目索引与已生效不可变、标识字段不可变、至少一行、厂家、项目、整数数量触发器均生效 | 依据 `docs/05` 6.5、`docs/06` 7.1；软删除字段可用；同物资同项目由部分唯一索引兜底；已生效单据/明细由触发器禁止更新和物理删除 |
+| 2026-11-04 | T4.2 | `uv run pytest tests/unit/test_document_fingerprint.py -q`（15 passed）；`uv run pytest tests/integration/test_documents_api.py -k "create_draft or request_id" -q`（2 passed） | 通过：重放同 `request_id` 返回原单且不重复建单；同键不同内容返回 409 `REQUEST_ID_CONFLICT`；草稿不影响库存；`request_fingerprint` 对省略/null/空值、`1`/`1.0` 归一，明细顺序与 `submit` 参与比较；`(created_by, request_id)` 唯一索引兜底并发 | 依据 `docs/06` 7.2、`docs/08` 7.9；乐观锁 `version` 在修改/提交路径生效；创建请求的错误与日志沿用客户端 `request_id` |
+| 2026-11-04 | T4.3 | `uv run pytest tests/integration/test_documents_api.py -k "project or manufacturer or header or integer" -q`（5 passed） | 通过：单据头出现 `project_id` 返回 422；出库明细携带厂家返回 422；入库缺少厂家返回 422；停用项目保存/提交均返回 409 `PROJECT_INACTIVE` 并含行号、编码与名称；整数物资小数返回 422；同物资同项目重复由服务层 422 和数据库部分唯一索引共同拦截 | 依据 `docs/06` 7.3、7.4、7.6，`docs/05` 6.5；明细保存物资/分类/厂家/项目/仓库/部门快照 |
+| 2026-11-04 | T4.4 | `uv run pytest tests/integration/test_documents_queries.py -q`（4 passed） | 通过：`v_inventory_balance` 只统计已生效且未软删除单据；草稿与软删除单不计入；`include_zero=true` 补齐零余额；`EXPLAIN QUERY PLAN` 命中 `ix_stock_documents_status_warehouse`、`ix_stock_document_lines_document_id`、`ix_stock_document_lines_material_id`、`ix_stock_document_lines_project_id`，无 `SCAN stock_document_lines` | 依据 `docs/06` 7.1；项目/部门/厂家筛选只用于关联查询，不改变库存余额定义 |
+| 2026-11-04 | T4.5 | `uv run pytest tests/integration/test_documents_api.py -k "inbound or balance" -q`（3 passed） | 通过：入库提交立即增加库存；多行汇总不超过 `MAX_BALANCE_MILLI`；9 行单行最大数量汇总后的合法边界可提交，再增加 0.010 返回 409 `BALANCE_LIMIT_EXCEEDED` 且库存不变；已生效单据不能修改 | 依据 `docs/06` 7.3，`docs/05` 6.6；提交前在 `BEGIN IMMEDIATE` 内重新读取余额与资料状态 |
+| 2026-11-04 | T4.6 | `uv run pytest tests/integration/test_documents_api.py -k "outbound or insufficient" -q`（3 passed）；`uv run pytest tests/concurrency/test_document_submit.py -q`（4 passed） | 通过：可用量等于出库量可提交，超过返回 409 `INSUFFICIENT_STOCK` 并含编码/可用量/请求量；多明细中任一物资不足时其他物资不扣减；同物资跨项目按物资汇总校验；余额 10 时两个并发出库 8 只有一个成功，最终余额 2、无负库存 | 依据 `docs/06` 7.4、7.7；出库、软删除与提交均在写锁内重算 |
+| 2026-11-04 | T4.7 | `uv run pytest tests/integration/test_documents_api.py tests/integration/test_documents_queries.py -q`（20 passed）；`GET /openapi.json` 核对路径 | 通过：`GET/POST /documents`、`GET/PATCH/DELETE /documents/{id}`、`POST /documents/{id}/submit`、`POST /documents/{id}/delete`、`GET /inventory`、`GET /inventory/transactions` 与文档路径一致；分页、类型/状态/仓库/部门/项目/厂家/单号/日期/软删除筛选生效；明细逐行返回 `project_id`/`project_name`，列表摘要 `projects` 去重；软删除路径已按 `docs/06` 7.5 完整实现，P5 继续补充其并发与边界专项测试 | 依据 `docs/11` 8.5；模板下载、XLSX 解析与导出仍按 P6 接入同一契约，未在本阶段实现 |
+| 2026-11-04 | T4.8 | `uv run pytest tests/integration/test_documents_api.py -q`（16 passed）；错误响应逐项核对 | 通过：库存不足、余额超限、版本冲突、重复提交、重复软删除、项目停用、请求键冲突、资源停用、权限不足、未认证分别映射 409/409/409/409/409/409/409/409/403/401；422 用于字段与数量校验；所有错误 `details` 均为含 `resource` 与 `items` 的对象；无伪成功 | 依据 `docs/09` 8.1；数据库唯一约束冲突转换为明确业务错误 |
+| 2026-11-04 | T4.9 | `uv run pytest tests/unit tests/integration -q`（291 passed）；`uv run pytest tests/concurrency -k "submit or stock" -q`（4 passed，12 deselected） | 通过：覆盖入库/出库、逐行项目、拆分项目、整数物资、单行最大与余额上限、库存不足整单回滚、并发提交、同 `request_id` 并发重放、单号并发生成与重复提交幂等 | 依据 `docs/16` 13.3，`docs/15` 12.1、12.2；测试使用 `tmp_path` 独立数据库，未读写开发数据库 |
+| 2026-11-04 | P4 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/integration`；`uv run pytest tests/concurrency -k "submit or stock"` | 通过：Ruff 0 告警、142 个文件格式一致；unit+integration 291 passed；concurrency 门禁 4 passed、12 deselected；另执行全量 `uv run pytest -q` 323 passed | 依据 `TASKS.md` P4 阶段门禁；迁移 `0003_stock_documents` 与模型通过 `alembic check`；未修改 `docs/` 产品规则；P3 的两个占位测试已改为使用真实单据表与库存视图 |

@@ -7,6 +7,7 @@
 import threading
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,14 @@ from app.db.migrations import upgrade_to_head
 from app.db.sqlite import begin_immediate
 from app.db.types import utc_now
 from app.main import create_app
+from app.modules.categories.models import Category
+from app.modules.departments.models import Department
+from app.modules.manufacturers.models import Manufacturer
+from app.modules.masterdata.service import create_entity
+from app.modules.materials.models import Material
+from app.modules.projects.models import Project
 from app.modules.users.models import Role, User, UserStatus
+from app.modules.warehouses.models import Warehouse
 
 ADMIN_USERNAME = "admin"
 ADMIN_INITIAL_PASSWORD = "initial-password-123"
@@ -176,6 +184,87 @@ def user_factory(
             return user
 
     return create
+
+
+@dataclass(frozen=True, slots=True)
+class MasterDataFixture:
+    """P4 单据测试所需的启用基础资料。"""
+
+    actor: User
+    warehouse: Warehouse
+    warehouse_second: Warehouse
+    department: Department
+    project: Project
+    project_second: Project
+    manufacturer: Manufacturer
+    category: Category
+    category_child: Category
+    material: Material
+    material_second: Material
+    material_integer: Material
+
+
+@pytest.fixture
+def master_data(
+    session_factory: sessionmaker[Session],
+    user_factory: Callable[..., User],
+) -> MasterDataFixture:
+    """通过业务服务建立启用仓库、部门、项目、厂家、两级分类与物资。"""
+    actor = user_factory("data-admin", role=Role.COMPANY_ADMIN, display_name="资料管理员")
+
+    def create(key: str, name: str, **fixed: Any) -> Any:
+        return create_entity(
+            session_factory,
+            key,
+            name=name,
+            actor_user_id=actor.id,
+            request_id=None,
+            **fixed,
+        )
+
+    warehouse = create("warehouse", "主仓")
+    warehouse_second = create("warehouse", "二号仓")
+    department = create("department", "生产部")
+    project = create("project", "一号项目")
+    project_second = create("project", "二号项目")
+    manufacturer = create("manufacturer", "钢厂")
+    category = create("category", "原材料")
+    category_child = create("category", "钢材", parent_id=category.id)
+    material = create(
+        "material",
+        "螺纹钢",
+        category_id=category_child.id,
+        unit="千克",
+        quantity_type="DECIMAL",
+    )
+    material_second = create(
+        "material",
+        "圆钢",
+        category_id=category.id,
+        unit="个",
+        quantity_type="DECIMAL",
+    )
+    material_integer = create(
+        "material",
+        "整根钢",
+        category_id=category_child.id,
+        unit="根",
+        quantity_type="INTEGER",
+    )
+    return MasterDataFixture(
+        actor=actor,
+        warehouse=warehouse,
+        warehouse_second=warehouse_second,
+        department=department,
+        project=project,
+        project_second=project_second,
+        manufacturer=manufacturer,
+        category=category,
+        category_child=category_child,
+        material=material,
+        material_second=material_second,
+        material_integer=material_integer,
+    )
 
 
 @pytest.fixture

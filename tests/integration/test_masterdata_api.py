@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -413,25 +414,34 @@ def test_warehouse_disable_enable_is_idempotent_and_audited(
 
 def test_warehouse_with_nonzero_stock_cannot_be_disabled(
     logged_in_admin: tuple[TestClient, dict[str, Any]],
-    session_factory: sessionmaker[Session],
+    master_data: Any,
 ) -> None:
     client, identity = logged_in_admin
-    warehouse = _post(client, identity, "/api/v1/warehouses", {"name": "主仓"})
-    with session_factory() as session:
-        session.execute(
-            text(
-                "CREATE TABLE v_inventory_balance "
-                "(warehouse_id TEXT NOT NULL, material_id TEXT NOT NULL, balance_milli INTEGER NOT NULL)"
-            )
-        )
-        session.execute(
-            text(
-                "INSERT INTO v_inventory_balance (warehouse_id, material_id, balance_milli) "
-                "VALUES (:warehouse_id, 'material', 1000)"
-            ),
-            {"warehouse_id": warehouse["id"]},
-        )
-        session.commit()
+    warehouse = _post(client, identity, "/api/v1/warehouses", {"name": "库存仓"})
+    document = _post(
+        client,
+        identity,
+        "/api/v1/documents",
+        {
+            "request_id": str(uuid4()),
+            "doc_type": "INBOUND",
+            "warehouse_id": warehouse["id"],
+            "department_id": master_data.department.id,
+            "lines": [
+                {
+                    "material_id": master_data.material.id,
+                    "quantity": "1",
+                    "manufacturer_id": master_data.manufacturer.id,
+                }
+            ],
+        },
+    )
+    submitted = client.post(
+        f"/api/v1/documents/{document['id']}/submit",
+        json={"version": 1},
+        headers=_csrf(identity),
+    )
+    assert submitted.status_code == 200, submitted.text
 
     response = client.post(f"/api/v1/warehouses/{warehouse['id']}/disable", headers=_csrf(identity))
 
@@ -624,7 +634,6 @@ def test_disabled_records_still_occupy_names(
 
 def test_referenced_entities_can_only_be_disabled(
     logged_in_admin: tuple[TestClient, dict[str, Any]],
-    session_factory: sessionmaker[Session],
 ) -> None:
     client, identity = logged_in_admin
     warehouse = _post(client, identity, "/api/v1/warehouses", {"name": "引用仓"})
@@ -634,38 +643,25 @@ def test_referenced_entities_can_only_be_disabled(
     project = _post(client, identity, "/api/v1/projects", {"name": "引用项目"})
     manufacturer = _post(client, identity, "/api/v1/manufacturers", {"name": "引用厂家"})
 
-    with session_factory() as session:
-        session.execute(
-            text(
-                "CREATE TABLE stock_documents (id TEXT PRIMARY KEY, warehouse_id TEXT, "
-                "department_id TEXT)"
-            )
-        )
-        session.execute(
-            text(
-                "CREATE TABLE stock_document_lines (id TEXT PRIMARY KEY, project_id TEXT, "
-                "manufacturer_id TEXT, material_id TEXT)"
-            )
-        )
-        session.execute(
-            text(
-                "INSERT INTO stock_documents (id, warehouse_id, department_id) "
-                "VALUES ('d1', :warehouse_id, :department_id)"
-            ),
-            {"warehouse_id": warehouse["id"], "department_id": department["id"]},
-        )
-        session.execute(
-            text(
-                "INSERT INTO stock_document_lines (id, project_id, manufacturer_id, material_id) "
-                "VALUES ('l1', :project_id, :manufacturer_id, :material_id)"
-            ),
-            {
-                "project_id": project["id"],
-                "manufacturer_id": manufacturer["id"],
-                "material_id": material["id"],
-            },
-        )
-        session.commit()
+    _post(
+        client,
+        identity,
+        "/api/v1/documents",
+        {
+            "request_id": str(uuid4()),
+            "doc_type": "INBOUND",
+            "warehouse_id": warehouse["id"],
+            "department_id": department["id"],
+            "lines": [
+                {
+                    "material_id": material["id"],
+                    "quantity": "1",
+                    "manufacturer_id": manufacturer["id"],
+                    "project_id": project["id"],
+                }
+            ],
+        },
+    )
 
     for path, entity_id, expected in (
         ("warehouses", warehouse["id"], "WAREHOUSE_IN_USE"),

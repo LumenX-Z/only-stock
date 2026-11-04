@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.modules.audit.models import AuditLog
 from app.modules.categories.models import Category
 from app.modules.departments.models import Department
+from app.modules.documents.models import DocumentCounter, StockDocument, StockDocumentLine
 from app.modules.manufacturers.models import Manufacturer
 from app.modules.masterdata.base import CodeCounter
 from app.modules.materials.models import Material
@@ -24,9 +25,12 @@ __all__ = [
     "Category",
     "CodeCounter",
     "Department",
+    "DocumentCounter",
     "Manufacturer",
     "Material",
     "Project",
+    "StockDocument",
+    "StockDocumentLine",
     "User",
     "Warehouse",
 ]

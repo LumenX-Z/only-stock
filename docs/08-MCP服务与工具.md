@@ -12,15 +12,15 @@
 1. MCP 适配层先把 `warehouse_code`、`department_code`、明细可选 `project_code`、明细 `material_code` 和入库 `manufacturer_code` 等关联引用参数分别按目标实体的 `code` 精确解析为内部 UUID，再调用普通单据服务；编码不存在返回 `RESOURCE_NOT_FOUND`，不得自动创建或按名称模糊匹配。解析出的内部 UUID 仅在业务服务内部使用，不得出现在工具结果或错误 `details`。
 2. `submit=false` 使用普通创建草稿服务，返回 `DRAFT`；不读取或修改库存。
 3. `submit=true` 使用专用原子应用服务，在同一 `BEGIN IMMEDIATE` 写事务内完成编码解析、草稿数据写入、提交校验、库存检查、状态置为 `POSTED`、生效字段和业务审计写入。不得先提交数据库草稿再另开事务提交生效。
-4. 入库、出库仍分别完整执行[《库存计算与单据业务流程》7.3](06-库存计算与单据业务流程.md#73-入库流程)、[7.4](06-库存计算与单据业务流程.md#74-出库流程)的校验；出库必须在持有写锁后重新计算余额。任一资料、数量、厂家、项目、库存、计数器或审计步骤失败，单据头和全部明细均回滚，不留下草稿，不产生库存变化。
+4. 入库、出库仍分别完整执行[《库存计算与单据业务流程》7.3](06-库存计算与单据业务流程.md#73-入库流程)、[7.4](06-库存计算与单据业务流程.md#74-出库流程)的校验；出库必须在持有写锁后重新计算余额。任一资料、数量、厂家、项目、备注、库存、计数器或审计步骤失败，单据头和全部明细均回滚，不留下草稿，不产生库存变化。
 5. MCP 工具输入不包含 `request_id`。服务端在适配层为每次 `tools/call` 生成 UUIDv4 作为 `request_id` 并与单据同时写入，`(created_by, request_id)` 唯一约束照常生效；该值只用于审计关联、日志和错误定位，不参与去重判定，不出现在任何成功结果中。Web 页面与 `/api/v1` 的客户端幂等键语义不受本节影响。
-6. MCP 建单去重按“创建者 + 规范化指纹 + 时间窗口”判定。窗口硬编码为 `MCP_DEDUP_WINDOW_SECONDS = 300`，不提供环境变量、工具参数或输出字段，调整需改代码发版。创建事务必须按以下规则计算 `request_fingerprint` 并与单据同时保存：在适配层完成 `code` 到内部引用的解析后，仅纳入统一的内部业务字段 `doc_type`、`warehouse_id`、`department_id`、`remark`、`submit` 及每行 `material_id`、`project_id`、`manufacturer_id`、`quantity_milli`，排除 `request_id` 和协议原始字段名；对象键按字典序排列；省略的可选字段、显式 `null` 与默认值归一为同一值（`submit` 默认 `false`，空项目为 `null`，可选 `remark` 的省略、`null` 和空字符串统一为 `null`）；数量统一转换为 `quantity_milli` 整数后参与计算；明细按请求中的顺序保留，数组顺序参与比较；以 UTF-8 规范化 JSON 的 SHA-256 十六进制值作为指纹。判定规则：
+6. MCP 建单去重按“创建者 + 规范化指纹 + 时间窗口”判定。窗口硬编码为 `MCP_DEDUP_WINDOW_SECONDS = 300`，不提供环境变量、工具参数或输出字段，调整需改代码发版。创建事务必须按以下规则计算 `request_fingerprint` 并与单据同时保存：在适配层完成 `code` 到内部引用的解析后，仅纳入统一的内部业务字段 `doc_type`、`warehouse_id`、`department_id`、`submit` 及每行 `material_id`、`project_id`、`manufacturer_id`、`quantity_milli`、`remark`，排除 `request_id` 和协议原始字段名；对象键按字典序排列；省略的可选字段、显式 `null` 与默认值归一为同一值（`submit` 默认 `false`，空项目为 `null`，逐行 `remark` 的省略、`null` 和空字符串统一为 `null`）；数量统一转换为 `quantity_milli` 整数后参与计算；明细按请求中的顺序保留，数组顺序参与比较；以 UTF-8 规范化 JSON 的 SHA-256 十六进制值作为指纹。判定规则：
    - 仅当 `created_source = 'MCP'` 且 `deleted_at IS NULL` 时执行窗口查询：同一 `created_by`、相同 `request_fingerprint`、`created_at >= 当前时间 - 300 秒`，按 `created_at` 倒序取至多一条。
    - 窗口查询与建单必须在同一 `BEGIN IMMEDIATE` 写事务内完成，依靠[《库存计算与单据业务流程》7.7](06-库存计算与单据业务流程.md#77-并发与原子性)的写串行化排除并发双建，不额外引入乐观锁或分布式锁。
    - 命中时直接返回该单的 `doc_no`、`status` 和详情字段，置 `deduplicated=true`，不写单据头、明细、计数器或业务审计，不重复计算库存。
    - 未命中时正常建单并置 `deduplicated=false`。
    - 窗口外不报错，允许生成内容相同的新单。MCP 侧不产生 `REQUEST_ID_CONFLICT`，该错误码只保留给 Web 与 `/api/v1` 的客户端幂等键冲突。
-   - `submit` 参与指纹，因此 `submit=false` 与 `submit=true` 即使内容相同也互不去重；修改任一参与指纹的字段（如 `remark`）即可改变指纹并绕过窗口，属预期行为，不视为绕过校验。
+   - `submit` 参与指纹，因此 `submit=false` 与 `submit=true` 即使内容相同也互不去重；修改任一参与指纹的字段（如某行 `remark`）即可改变指纹并绕过窗口，属预期行为，不视为绕过校验。
    - 原子直接提交失败并完整回滚时没有落库记录，同一内容可立即重试成功。已软删除的单据不参与窗口匹配，软删除后重新录入相同内容视为新建，不受窗口限制。
 7. 本期不提供单独提交 MCP 已建草稿的工具；客户端可查看草稿，再通过网页/API 提交，或再次调用 `document_create(submit=true)` 创建并直接提交另一张单。两种模式互不去重，留下的草稿由调用方或用户自行删除，调用方必须避免业务重复。
 
@@ -71,13 +71,13 @@
 | `doc_type`                                    | 是       | `INBOUND` 或 `OUTBOUND`                                      |
 | `submit`                                      | 否       | 默认 `false`；`true` 时原子创建并提交                        |
 | `warehouse_code`, `department_code`         | 是       | 分别精确匹配启用仓库、部门的 `code`                            |
-| `remark`                                      | 否       | 与普通单据一致                                                   |
 | `lines`                                       | 是       | 至少一行；同一 `material_code` 与 `project_code` 组合不重复（项目为空视为同一取值） |
 | `lines[].project_code`                        | 否       | 可空；非空时精确匹配启用项目的 `code`；同一单据各行可不同     |
+| `lines[].remark`                              | 否       | 可空；去首尾空白后最多 500 字符；每行独立；省略、`null` 与空字符串归一为无备注 |
 | `lines[].material_code`, `lines[].quantity` | 是       | 精确匹配物资 `code`；数量为十进制字符串，执行数量类型/精度校验 |
 | `lines[].manufacturer_code`                   | 入库必填 | 必须精确匹配启用厂家的 `code`；出库出现此字段即拒绝            |
 
-`doc_no` 由服务端生成并在结果中返回，不能由客户端指定或修改。`project_code` 只允许出现在 `lines[]` 内，顶层出现按参数校验错误拒绝。
+`doc_no` 由服务端生成并在结果中返回，不能由客户端指定或修改。`project_code` 与 `remark` 只允许出现在 `lines[]` 内，顶层出现按参数校验错误拒绝。
 
 `document_create` 的工具描述必须写明去重语义，供模型正确解释输出：`deduplicated=true` 表示服务端在 300 秒内已存在内容完全相同的 MCP 单据，本次未新建，返回的是原单。描述中不得出现 `request_id` 或任何内部 ID，只描述业务可见的判定条件与结果含义。
 
@@ -89,13 +89,13 @@
   "submit": true,
   "warehouse_code": "CK-00001",
   "department_code": "BM-00001",
-  "remark": "采购入库",
   "lines": [
     {
       "material_code": "WZ-00001",
       "quantity": "1.250",
       "manufacturer_code": "CJ-00001",
-      "project_code": "XM-00001"
+      "project_code": "XM-00001",
+      "remark": "采购批次 A"
     }
   ]
 }
@@ -131,10 +131,10 @@
 | 工具/场景                     | 定位参数                | 输出字段                                                                                                                                                                             |
 | ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `document_list`（摘要列表）   | 无（分页/筛选）         | `doc_no`, `doc_type`, `status`, `warehouse_code`, `warehouse_name`, `department_code`, `department_name`, `projects`, `created_by_name`, `created_at`, `deleted` |
-| `document_list`（按单号查询） | `doc_no`                | 摘要字段另加 `remark`, `submitted_at`, `submitted_by_name`, `deleted_at`, `lines`                                                                                                    |
+| `document_list`（按单号查询） | `doc_no`                | 摘要字段另加 `submitted_at`, `submitted_by_name`, `deleted_at`, `lines`                                                                                                    |
 | `document_create`             | 无（系统生成 `doc_no`） | 与按单号查询的详情相同，另加 `deduplicated`（布尔；仅此工具输出）                                                                                                                    |
 
-`projects` 为去重后的项目列表，元素为 `{project_code, project_name}`；没有项目行时为空数组。`lines[]` 的字段为 `line_no`、`material_code`、`material_name`、`unit`、`quantity_type`、`category_name`、`parent_category_name`、`manufacturer_code`、`manufacturer_name`、`project_code`、`project_name`、`quantity`；入库单的厂家字段必填，出库单为 `null`；项目字段可空，`project_name` 为明细快照。
+`projects` 为去重后的项目列表，元素为 `{project_code, project_name}`；没有项目行时为空数组。`lines[]` 的字段为 `line_no`、`material_code`、`material_name`、`unit`、`quantity_type`、`category_name`、`parent_category_name`、`manufacturer_code`、`manufacturer_name`、`project_code`、`project_name`、`quantity`、`remark`；入库单的厂家字段必填，出库单为 `null`；项目字段可空，`project_name` 为明细快照；`remark` 为逐行备注，可空。
 
 示例成功结果（不含任何内部 ID）：
 
@@ -154,7 +154,6 @@
       "project_name": "示例项目"
     }
   ],
-  "remark": "采购入库",
   "created_by_name": "张三",
   "created_at": "2026-10-24T02:15:00+00:00",
   "submitted_by_name": "张三",
@@ -174,7 +173,8 @@
       "manufacturer_name": "示例厂家",
       "project_code": "XM-00001",
       "project_name": "示例项目",
-      "quantity": "1.250"
+      "quantity": "1.250",
+      "remark": "采购批次 A"
     }
   ]
 }

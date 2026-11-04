@@ -448,42 +448,42 @@ uv run pytest tests/recovery --collect-only
 
 完成入库/出库 XLSX 模板、表头区解析、无副作用解析、部分填入、导出和安全防护。
 
-- [ ] **T6.1 XLSX 模板生成**
+- [x] **T6.1 XLSX 模板生成**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.1。
   - 产出：入库/出库模板；“录入数据”“填写说明”工作表；前 2 行表头区（仓库、管理部门）；第 3 行明细列标题、第 4 行起明细；明细含逐行备注；版本 `INBOUND_V1`/`OUTBOUND_V1`。
   - 完成：出库模板无厂家列；项目列逐行可选；备注逐行独立；表头区标签与位置固定；模板由服务端动态生成。
 
-- [ ] **T6.2 只读解析与文件防护**
+- [x] **T6.2 只读解析与文件防护**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.1、7.8.3；[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md) 11.1。
   - 产出：`openpyxl` 只读解析；5 MiB/2,000 行限制；ZIP/工作表/表头区结构校验；不执行宏/公式/外部链接；普通数值从 `<v>` 原始词法转 `Decimal`。
   - 完成：超限、损坏、异常压缩、表头区或明细列结构不符被拒绝；公式行按行级错误；不使用 `cell.value` 浮点结果。
 
-- [ ] **T6.3 名称解析**
+- [x] **T6.3 名称解析**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.2；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.8。
   - 产出：表头区仓库/部门一次解析；项目/厂家/分类/物资批量名称解析；父子分类消歧；启停状态校验。
   - 完成：名称仅去首尾空白精确匹配；表头区找不到/停用为文件级错误；行内找不到/停用/重复定位产生行级错误；不自动创建或改名。
 
-- [ ] **T6.4 文件级/行级错误与部分填入**
+- [x] **T6.4 文件级/行级错误与部分填入**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.3、7.8.4。
   - 产出：文件级失败整份拒绝；行级错误跳过（含备注超长）；`SUCCESS/PARTIAL` 响应、行数统计、错误摘要。
   - 完成：部分填入显著提示；错误含 Excel 行号/字段/代码/原因；不生成错误报告、不持久化解析状态。
 
-- [ ] **T6.5 无副作用解析接口**
+- [x] **T6.5 无副作用解析接口**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.4；[11-单据与库存业务API.md](docs/11-单据与库存业务API.md) 8.5。
   - 产出：`POST /document-entry/parse`；仅在新建页使用；CSRF/权限；不开启写事务、不写单据/审计/解析表。
   - 完成：重复解析不改变数据；响应不含单据 ID/批次 ID/文件哈希；单据头仅来自表头区，备注仅来自明细行；保存/提交仍走普通单据接口。
 
-- [ ] **T6.6 单张单据导出**
+- [x] **T6.6 单张单据导出**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.5。
   - 产出：`GET /documents/{id}/export`；“录入数据/填写说明/单据信息”；表头区布局；逐行备注；草稿当前资料、生效单快照；文件名安全编码。
   - 完成：导出不改变状态；超过 2,000 行提示不可快速录入；用户文本不以公式解释；数量以文本写入。
 
-- [ ] **T6.7 模板与导出安全测试**
+- [x] **T6.7 模板与导出安全测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.8。
   - 产出：5 MiB/2,001 行、损坏 ZIP、公式/外部链接、压缩炸弹、公式注入、极值精度、表头区缺失/错位、备注超长用例。
   - 完成：`uv run pytest tests/security` 与 XLSX 专项通过；解析前后单据/审计/主数据数量不变。
 
-- [ ] **T6.8 XLSX 性能与内存**
+- [x] **T6.8 XLSX 性能与内存**
   - 依据：[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md) 11.3；[16-验收标准.md](docs/16-验收标准.md) 13.7。
   - 产出：2,000 行文件解析/导出基准；批量名称解析。
   - 完成：参考环境下单次目标 ≤10 秒，无内存溢出和逐行重复查询。
@@ -767,3 +767,12 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | T6.1（文档） | 核对 `docs/05` 6.5、`docs/06` 7.2–7.4、`docs/07` 7.8.1–7.8.5、`docs/08` 7.9/8.6.3–8.6.5、`docs/11` 8.5、`docs/12` 第 9 章、`docs/15` 12.1/12.2、`docs/16` 13.8 与 `TASKS.md` P4/P6 的引用一致性 | 已完成：备注改为逐行独立（`stock_document_lines.remark`），移除单据头 `remark`；XLSX“录入数据”前 2 行为仓库/管理部门表头区、第 3 行明细列标题、第 4 行起明细，备注为最后一列；同步 MCP 指纹/参数/输出、API 示例、测试夹具和验收条目；未写代码、未执行测试 | 依据 `docs/07` 7.8.1、`docs/05` 6.5；P4/P5 相关实现与测试待回改，T4.1/T4.2/T4.3/T4.7/T4.9 已标回进行中，P6 实现从 T6.1 开始 |
 | 2026-11-04 | T4.1/T4.2/T4.3/T4.7/T4.9（备注回改） | `uv run pytest tests/integration/test_documents_migration.py tests/integration/test_documents_api.py tests/unit/test_document_fingerprint.py -q`；`uv run pytest tests/integration/test_documents_lifecycle.py tests/recovery -q`；`uv run alembic upgrade head`；`uv run alembic check` | 通过：迁移 9 passed、API 与指纹 44 passed、生命周期 9 passed、恢复 7 passed；`stock_documents` 移除 `remark`，`stock_document_lines` 新增可空 `remark` 并带 500 字符 CHECK；升级把原单据头备注复制到明细行，降级取首行备注回填后再升级可还原；API 单据头传 `remark` 返回 422，逐行备注去首尾空白、空串归一为 null、超长 422；指纹改为包含逐行备注；`alembic check` 无模型漂移 | 依据 `docs/05` 6.5、`docs/06` 7.2–7.4、`docs/08` 7.9、`docs/11` 8.5、`docs/16` ACC-DATA-030/031；新增 `0004_line_remarks`，重建表时保留索引、检查约束、触发器与库存视图 |
 | 2026-11-04 | P4 门禁（备注回改后） | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/integration`；`uv run pytest tests/concurrency -k "submit or stock"`；`uv run pytest -q` | 通过：Ruff 0 告警、145 个文件格式一致；unit+integration 306 passed；concurrency 门禁 7 passed、14 deselected；全量 350 passed | 依据 `TASKS.md` P4 阶段门禁；P4 相关任务已恢复 `[x]`，P5 恢复/生命周期夹具已同步列变更并全部通过 |
+| 2026-11-04 | T6.1 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_xlsx_templates.py -q`（9 passed）；`uv run pytest tests/integration/test_xlsx_api.py -q`（8 passed） | 通过：服务端动态生成 `INBOUND_V1`/`OUTBOUND_V1`；“录入数据”“填写说明”两张表；A1/A2 固定标签，B1/B2 留空；第 3 行明细列，第 4 行起数据；入库含厂家列、出库无厂家列，备注均为最后一列；数量列预设文本格式；填写说明含模板标识、版本、必填性、数量规则和示例；两种角色均可下载，文件名含 ASCII 回退名与 RFC 5987 中文名 | 依据 `docs/07` 7.8.1、`docs/16` ACC-XLSX-001；模板布局常量集中在 `app/modules/xlsx/constants.py`，解析与导出共用同一列定义 |
+| 2026-11-04 | T6.2 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security/test_xlsx_security.py -q`（19 passed）；`uv run pytest tests/unit/test_xlsx_parser.py -q`（30 passed） | 通过：5 MiB+1 上传返回 422 `XLSX_FILE_TOO_LARGE`；2,001 个非空数据行返回 `XLSX_ROW_LIMIT_EXCEEDED`；损坏 ZIP 返回 `XLSX_INVALID_FILE`；压缩炸弹、外部链接、宏部件返回 `XLSX_ARCHIVE_UNSAFE`；表头区/列标题异常返回 `XLSX_HEADER_INVALID`/`XLSX_COLUMNS_INVALID`；明细公式行按行级 `FORMULA_NOT_ALLOWED` 跳过；普通数值从工作表 XML `<v>` 原始词法转 `Decimal`，无法取得原始词法时为行级错误 | 依据 `docs/07` 7.8.1、7.8.3，`docs/14` 11.1，`docs/16` ACC-XLSX-011/013；解析使用 `openpyxl` 只读模式与独立 ZIP 安全校验，未调用 Office，未使用 `cell.value` 浮点换算数量 |
+| 2026-11-04 | T6.3 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_xlsx_parser.py -q`（30 passed） | 通过：仓库、管理部门表头区各解析一次，为空/未找到/停用为文件级错误；项目、厂家、一级/二级分类、物资按文件批量查询；不同一级分类下同名二级分类与不同分类同名物资按父子关系正确消歧；名称仅去首尾空白精确匹配，大小写差异不匹配；行内未找到/停用/重复定位产生行级错误；解析前后主数据数量不变，不自动创建或改名 | 依据 `docs/07` 7.8.2，`docs/05` 6.8；`app/modules/xlsx/names.py` 每类资料一次批量查询，性能测试确认 SELECT 次数不超过 20 |
+| 2026-11-04 | T6.4 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security/test_xlsx_security.py -q`（19 passed）；`uv run pytest tests/unit/test_xlsx_parser.py -q`（30 passed） | 通过：文件级失败整份拒绝且不返回 `document`；行级错误逐行跳过，备注超过 500 字符、公式、未找到/停用、重复行均按行级错误；返回 `SUCCESS`/`PARTIAL`、`total_rows`/`filled_rows`/`skipped_rows` 和含 Excel 行号、字段、代码、原因的错误摘要；`PARTIAL` 响应含“部分明细未填入，请核对后再保存或提交”；不生成错误报告、不持久化解析状态 | 依据 `docs/07` 7.8.3、7.8.4，`docs/16` ACC-XLSX-004/005；页面提示由 P8 直接渲染 `notice` 与 `errors`，P6 提供稳定响应契约 |
+| 2026-11-04 | T6.5 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security/test_xlsx_security.py -q`（19 passed，含 no-side-effects 与 write-lock 用例） | 通过：`POST /api/v1/document-entry/parse` 仅在新建页契约中使用，multipart `doc_type`+`file`，不要求 `request_id`；未认证 401、无 CSRF 403；重复解析响应完全一致，解析前后单据/明细/审计/分类/物资数量不变；在另一连接持有 `BEGIN IMMEDIATE` 写锁时解析仍成功，证明解析不开启写事务；响应不含单据 ID、批次 ID、文件哈希或错误报告 URL；单据头仅来自 B1/B2，备注仅来自明细行 | 依据 `docs/07` 7.8.4，`docs/11` 8.5，`docs/14` 11.2，`docs/16` ACC-XLSX-006/008；解析不写库，保存/提交仍走普通 `POST /documents` 与提交接口 |
+| 2026-11-04 | T6.6 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/integration/test_xlsx_api.py -q`（8 passed）；`uv run pytest tests/security/test_xlsx_security.py -q`（19 passed，含公式注入与状态不变用例） | 通过：`GET /api/v1/documents/{id}/export` 返回“录入数据”“填写说明”“单据信息”；草稿导出取当前项目/分类/物资/厂家名称，已生效及已软删除单取历史快照；导出前后状态、版本与软删除标记不变；超过 2,000 行仍允许下载，填写说明与单据信息提示“不能用于快速录入”，响应头 `X-XLSX-Quick-Entry: disabled`；数量写为三位小数文本；项目、分类、物资、厂家、备注中以 `=`,`+`,`-`,`@` 开头的文本均为字符串单元格；文件名含安全单号与类型，ASCII 回退名与 RFC 5987 中文名均安全 | 依据 `docs/07` 7.8.5，`docs/16` ACC-XLSX-010/012，`docs/14` 11.1；导出属于读取操作，不写审计或库存 |
+| 2026-11-04 | T6.7 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/security -q`（35 passed）；`uv run pytest tests/unit/test_xlsx_templates.py tests/unit/test_xlsx_parser.py tests/unit/test_xlsx_performance.py tests/security/test_xlsx_security.py tests/integration/test_xlsx_api.py -q`（68 passed） | 通过：覆盖 5 MiB/2,001 行、损坏 ZIP、压缩炸弹、外部链接、宏、表头区缺失/错位、列顺序错误、公式与公式注入、极值精度、备注超长、隐藏行、软删除导出等恶意及边界夹具；所有解析用例前后单据、明细、审计、分类、物资数量一致；未发现 XLSX 直接建单/改单、批次表或错误报告接口 | 依据 `docs/16` 13.8、`docs/15` 12.1/12.2；安全测试不读写开发数据库或真实备份目录 |
+| 2026-11-04 | T6.8 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_xlsx_performance.py -q`（2 passed） | 通过：2,000 行入库文件解析耗时低于 10 秒，SELECT 次数不超过 20（实测远低于阈值，名称解析按项目/厂家/一级分类/二级分类/物资各一次批量查询）；2,000 行单据导出耗时低于 10 秒且生成有效 XLSX；测试使用 `tmp_path` 独立数据库，无内存溢出或逐行重复查询 | 依据 `docs/14` 11.3，`docs/16` ACC-PERF-004；为使 2,000 行单据在受限文件系统上稳定创建，SQLite 每连接增加 `PRAGMA temp_store=MEMORY`，并同步 `docs/02` 3.4 与 `tests/unit/test_sqlite.py` |
+| 2026-11-04 | P6 门禁 | `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/security -k "xlsx or template or export"`；`uv run pytest -q` | 通过：Ruff 0 告警、161 个文件格式一致；P6 门禁 60 passed、182 deselected；全量 418 passed；XLSX 专项 68 passed | 依据 `TASKS.md` P6 阶段门禁；未新增迁移、未新增解析批次/错误行/上传文件表；所有 Python 命令使用 uv，测试使用 `tmp_path` 独立数据库与备份目录 |

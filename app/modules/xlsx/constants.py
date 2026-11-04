@@ -1,0 +1,80 @@
+"""XLSX 模板布局、版本与安全限制。
+
+依据 docs/07-XLSX模板、快速录入与导出.md 7.8.1、7.8.3：
+- “录入数据”前 2 行为仓库、管理部门表头区，第 3 行为明细列标题，第 4 行起为明细；
+- 入库列含厂家，出库无厂家列，备注均为最后一列；
+- 入库/出库模板版本分别为 ``INBOUND_V1`` / ``OUTBOUND_V1``；
+- 上传限制 5 MiB、2,000 非空数据行，并校验解压尺寸与工作簿结构。
+"""
+
+from app.modules.documents.models import DocType
+
+SHEET_DATA = "录入数据"
+SHEET_HELP = "填写说明"
+SHEET_INFO = "单据信息"
+
+TEMPLATE_IDENTIFIER_LABEL = "模板标识"
+TEMPLATE_IDENTIFIER = "ONLY-STOCK"
+TEMPLATE_VERSION_LABEL = "template_version"
+
+TEMPLATE_VERSIONS: dict[str, str] = {
+    DocType.INBOUND.value: "INBOUND_V1",
+    DocType.OUTBOUND.value: "OUTBOUND_V1",
+}
+
+HEADER_WAREHOUSE_LABEL = "仓库名称"
+HEADER_DEPARTMENT_LABEL = "管理部门名称"
+HEADER_LAST_ROW = 2
+TITLE_ROW = 3
+FIRST_DATA_ROW = 4
+
+PROJECT_COLUMN = "项目名称"
+LEVEL1_COLUMN = "一级分类名称"
+LEVEL2_COLUMN = "二级分类名称"
+MATERIAL_COLUMN = "物资名称"
+QUANTITY_COLUMN = "数量"
+MANUFACTURER_COLUMN = "厂家名称"
+REMARK_COLUMN = "备注"
+
+INBOUND_COLUMNS: tuple[str, ...] = (
+    PROJECT_COLUMN,
+    LEVEL1_COLUMN,
+    LEVEL2_COLUMN,
+    MATERIAL_COLUMN,
+    QUANTITY_COLUMN,
+    MANUFACTURER_COLUMN,
+    REMARK_COLUMN,
+)
+OUTBOUND_COLUMNS: tuple[str, ...] = (
+    PROJECT_COLUMN,
+    LEVEL1_COLUMN,
+    LEVEL2_COLUMN,
+    MATERIAL_COLUMN,
+    QUANTITY_COLUMN,
+    REMARK_COLUMN,
+)
+
+COLUMN_TITLES: dict[str, tuple[str, ...]] = {
+    DocType.INBOUND.value: INBOUND_COLUMNS,
+    DocType.OUTBOUND.value: OUTBOUND_COLUMNS,
+}
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_DATA_ROWS = 2_000
+MAX_DATA_ROW = FIRST_DATA_ROW + MAX_DATA_ROWS - 1
+
+# 工作表 dimension 可能被恶意放大；只扫描允许范围内的数据行。
+MAX_SHEET_SCAN_ROW = MAX_DATA_ROW + 100
+
+MAX_UNCOMPRESSED_BYTES = 40 * 1024 * 1024
+MAX_ZIP_ENTRIES = 2_000
+MAX_COMPRESSION_RATIO = 200
+MIN_RATIO_CHECK_BYTES = 1024 * 1024
+MAX_RAW_NUMERIC_CELLS = 100_000
+MAX_RELATIONSHIP_BYTES = 1024 * 1024
+MAX_METADATA_ROWS = 30
+
+ALLOWED_SHEETS = frozenset({SHEET_DATA, SHEET_HELP, SHEET_INFO})
+
+PARTIAL_NOTICE = "部分明细未填入，请核对后再保存或提交"
+SUCCESS_NOTICE = "全部明细已填入，可继续编辑后保存或提交"

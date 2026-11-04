@@ -27,6 +27,7 @@ from app.modules.inventory.router import router as inventory_router
 from app.modules.masterdata.router import router as masterdata_router
 from app.modules.users.router import router as users_router
 from app.modules.users.service import bootstrap_initial_admin
+from app.modules.xlsx.router import router as xlsx_router
 from app.runtime import Runtime, build_runtime
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users_router)
     app.include_router(masterdata_router)
     app.include_router(documents_router)
+    app.include_router(xlsx_router)
     app.include_router(inventory_router)
     app.include_router(audit_router)
     return app

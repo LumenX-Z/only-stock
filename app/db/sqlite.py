@@ -97,6 +97,7 @@ def _apply_pragmas(dbapi_connection: Any, busy_timeout_ms: int) -> None:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
+        cursor.execute("PRAGMA temp_store=MEMORY")
     finally:
         cursor.close()
 

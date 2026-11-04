@@ -31,6 +31,8 @@ def test_each_connection_uses_documented_pragmas(db_engine: Engine) -> None:
         assert connection.exec_driver_sql("PRAGMA journal_mode").scalar().lower() == "wal"
         assert connection.exec_driver_sql("PRAGMA synchronous").scalar() == 1
         assert connection.exec_driver_sql("PRAGMA busy_timeout").scalar() == 5000
+        # 临时表与排序使用内存，避免受限文件系统上创建 SQLite 外部临时文件。
+        assert connection.exec_driver_sql("PRAGMA temp_store").scalar() == 2
 
     verify_sqlite_pragmas(db_engine, 5000)
 

@@ -339,14 +339,14 @@ def _terminate_mid_transaction(
         connection.execute(
             """
             INSERT INTO stock_documents (
-                id, doc_no, doc_type, status, remark, warehouse_id, warehouse_code,
+                id, doc_no, doc_type, status, warehouse_id, warehouse_code,
                 warehouse_name, department_id, department_code, department_name,
                 created_source, request_id, request_fingerprint, version, created_by,
                 created_by_name, submitted_by, submitted_by_name, created_at, updated_at,
                 submitted_at, deleted_at, deleted_by
             )
             SELECT
-                ?, ?, doc_type, status, remark, warehouse_id, warehouse_code,
+                ?, ?, doc_type, status, warehouse_id, warehouse_code,
                 warehouse_name, department_id, department_code, department_name,
                 created_source, ?, request_fingerprint, version, created_by,
                 created_by_name, submitted_by, submitted_by_name, created_at, updated_at,

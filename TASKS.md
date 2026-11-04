@@ -343,19 +343,17 @@ uv run pytest tests/concurrency
 
 完成单据草稿、库存视图、入库/出库提交和单据/库存查询，使核心库存业务可用。
 
-> 2026-11-04 规格变更：备注改为按明细行保存，单据头 `remark` 移除。T4.1、T4.2、T4.3、T4.7、T4.9 需回改模型、迁移、API、指纹和测试后重新通过 P4 门禁；P5 的恢复与生命周期测试夹具也需同步列变更。
-
-- [~] **T4.1 单据表、明细与约束**（待回改备注模型）
+- [x] **T4.1 单据表、明细与约束**
   - 依据：[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.5。
   - 产出：`stock_documents`、`stock_document_lines`、`document_counters` 模型与迁移；索引、唯一约束、触发器；明细 `remark` 字段、单据头无 `remark`。
   - 完成：已生效单据/明细禁止更新；软删除字段可用；同物资同项目唯一；至少一行的约束由服务与数据库共同保证；单据头不保存备注，明细备注最多 500 字符。
 
-- [~] **T4.2 草稿创建、修改、删除与幂等**（待回改备注模型）
+- [x] **T4.2 草稿创建、修改、删除与幂等**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.2。
   - 产出：草稿服务；客户端 `request_id` 幂等；`request_fingerprint` 规范化计算（逐行备注参与）；乐观锁 `version`。
   - 完成：Web/API 重放同 `request_id` 返回原单；同键不同内容 409 `REQUEST_ID_CONFLICT`；草稿不影响库存。
 
-- [~] **T4.3 明细校验与逐行项目**（待回改备注模型）
+- [x] **T4.3 明细校验与逐行项目**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.3、7.4；[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md) 6.5。
   - 产出：入库厂家必填、出库无厂家；项目可空且逐行；逐行备注可空且最多 500 字符；同物资同项目去重；数量/单位/快照校验。
   - 完成：单据头出现 `project_id` 或 `remark` 返回 422；出库带厂家返回 422；停用项目 409 `PROJECT_INACTIVE` 并列行号；备注超长 422。
@@ -375,7 +373,7 @@ uv run pytest tests/concurrency
   - 产出：出库提交路径；事务内读取当前余额；按物资汇总拆行数量；负库存拒绝。
   - 完成：可用量等于出库量可提交；不足返回 `INSUFFICIENT_STOCK` 含编码/可用量/请求量；任一行失败整单回滚；并发两单不能都基于旧余额成功。
 
-- [~] **T4.7 单据与库存查询接口**（待回改备注模型）
+- [x] **T4.7 单据与库存查询接口**
   - 依据：[11-单据与库存业务API.md](docs/11-单据与库存业务API.md) 8.5。
   - 产出：单据分页/详情、修改/删除/提交、库存和流水接口；明细返回逐行 `remark`；软删除路径可先留桩，P5 完成；模板下载/XLSX 解析/导出由 P6 接入同一 API 契约。
   - 完成：路径、分页、筛选、权限、示例响应与文档一致；项目按明细返回、`projects` 摘要正确。
@@ -385,7 +383,7 @@ uv run pytest tests/concurrency
   - 产出：库存不足、版本冲突、重复提交、项目停用、余额超限等错误映射。
   - 完成：409/422/403/401 口径正确；`details` 结构统一；不得伪成功。
 
-- [~] **T4.9 单据与库存测试**（待回改备注模型）
+- [x] **T4.9 单据与库存测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.3；[15-测试方案.md](docs/15-测试方案.md) 12.1。
   - 产出：入库/出库、拆分项目、边界数量、库存不足、并发提交、幂等重试、逐行备注测试。
   - 完成：`uv run pytest tests/unit tests/integration tests/concurrency` 相关用例通过。
@@ -404,8 +402,6 @@ uv run pytest tests/concurrency -k "submit or stock"
 ### 阶段目标
 
 补齐已生效单据软删除、项目/资料停用启用对单据的影响，以及负库存、余额上限和故障回滚的完整边界。
-
-> 2026-11-04 规格变更：备注改为按明细行保存。P5 的恢复、生命周期和并发测试中涉及 `stock_documents.remark` 的原始 SQL/夹具需同步改为明细 `remark`，并在 P4 备注模型回改后重跑。
 
 - [x] **T5.1 已生效单据软删除**
   - 依据：[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md) 7.5。
@@ -769,3 +765,5 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | T5.6 | `uv run pytest tests/concurrency -q`（21 passed） | 通过：并发出库只成功一单且余额不为负；软删除入库与出库提交竞争只有一方成功，最终余额为 0 或 2 千分比且无负库存；仓库停用与入库提交竞争恰好一方成功，不出现“仓库已停用但库存非零”；项目停用与提交竞争保持快照且审计/库存一致；并发停用/启用项目最终版本与审计条数等于实际状态变化次数；并发重复软删除只写一次标记与审计 | 依据 `docs/16` 13.3 ACC-FLOW-008/009、`docs/15` 12.1；新增 `tests/concurrency/test_document_races.py`，原有并发出库测试保留 |
 | 2026-11-04 | P5 门禁 | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/concurrency`；`uv run pytest tests/recovery --collect-only` | 通过：Ruff 0 告警、145 个文件格式一致；concurrency 21 passed；recovery 收集 7 个测试（`7 tests collected`）；另执行全量 `uv run pytest -q` 344 passed | 依据 `TASKS.md` P5 阶段门禁；未修改 `docs/` 产品规则，未修改生产代码；软删除、停用启用与余额校验在 P4 已实现，P5 补齐边界、故障注入与并发专项测试并验证完成标准 |
 | 2026-11-04 | T6.1（文档） | 核对 `docs/05` 6.5、`docs/06` 7.2–7.4、`docs/07` 7.8.1–7.8.5、`docs/08` 7.9/8.6.3–8.6.5、`docs/11` 8.5、`docs/12` 第 9 章、`docs/15` 12.1/12.2、`docs/16` 13.8 与 `TASKS.md` P4/P6 的引用一致性 | 已完成：备注改为逐行独立（`stock_document_lines.remark`），移除单据头 `remark`；XLSX“录入数据”前 2 行为仓库/管理部门表头区、第 3 行明细列标题、第 4 行起明细，备注为最后一列；同步 MCP 指纹/参数/输出、API 示例、测试夹具和验收条目；未写代码、未执行测试 | 依据 `docs/07` 7.8.1、`docs/05` 6.5；P4/P5 相关实现与测试待回改，T4.1/T4.2/T4.3/T4.7/T4.9 已标回进行中，P6 实现从 T6.1 开始 |
+| 2026-11-04 | T4.1/T4.2/T4.3/T4.7/T4.9（备注回改） | `uv run pytest tests/integration/test_documents_migration.py tests/integration/test_documents_api.py tests/unit/test_document_fingerprint.py -q`；`uv run pytest tests/integration/test_documents_lifecycle.py tests/recovery -q`；`uv run alembic upgrade head`；`uv run alembic check` | 通过：迁移 9 passed、API 与指纹 44 passed、生命周期 9 passed、恢复 7 passed；`stock_documents` 移除 `remark`，`stock_document_lines` 新增可空 `remark` 并带 500 字符 CHECK；升级把原单据头备注复制到明细行，降级取首行备注回填后再升级可还原；API 单据头传 `remark` 返回 422，逐行备注去首尾空白、空串归一为 null、超长 422；指纹改为包含逐行备注；`alembic check` 无模型漂移 | 依据 `docs/05` 6.5、`docs/06` 7.2–7.4、`docs/08` 7.9、`docs/11` 8.5、`docs/16` ACC-DATA-030/031；新增 `0004_line_remarks`，重建表时保留索引、检查约束、触发器与库存视图 |
+| 2026-11-04 | P4 门禁（备注回改后） | `UV_CACHE_DIR=/tmp/only-stock-uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit tests/integration`；`uv run pytest tests/concurrency -k "submit or stock"`；`uv run pytest -q` | 通过：Ruff 0 告警、145 个文件格式一致；unit+integration 306 passed；concurrency 门禁 7 passed、14 deselected；全量 350 passed | 依据 `TASKS.md` P4 阶段门禁；P4 相关任务已恢复 `[x]`，P5 恢复/生命周期夹具已同步列变更并全部通过 |

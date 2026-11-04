@@ -74,8 +74,7 @@ def test_create_draft_does_not_change_stock_and_replays_request_id(
     payload = inbound_payload(
         master_data,
         request_id=request_id,
-        lines=[line(master_data, quantity="1.250")],
-        remark="采购入库",
+        lines=[line(master_data, quantity="1.250", remark="采购入库")],
     )
 
     response = client.post("/api/v1/documents", json=payload, headers=csrf(identity))
@@ -98,7 +97,7 @@ def test_create_draft_does_not_change_stock_and_replays_request_id(
     assert replay["version"] == 1
 
     conflict_payload = dict(payload)
-    conflict_payload["remark"] = "不同内容"
+    conflict_payload["lines"] = [line(master_data, quantity="1.250", remark="不同内容")]
     response = client.post("/api/v1/documents", json=conflict_payload, headers=csrf(identity))
     assert response.status_code == 409, response.text
     assert response.headers["X-Request-ID"] == request_id
@@ -111,10 +110,11 @@ def test_create_draft_does_not_change_stock_and_replays_request_id(
     ("field", "value"),
     [
         ("project_id", str(uuid4())),
+        ("remark", "单据头备注"),
         ("unknown_field", "x"),
     ],
 )
-def test_document_header_rejects_project_and_unknown_fields(
+def test_document_header_rejects_project_remark_and_unknown_fields(
     logged_in_admin: tuple[TestClient, dict[str, Any]],
     master_data: MasterDataFixture,
     field: str,
@@ -128,6 +128,45 @@ def test_document_header_rejects_project_and_unknown_fields(
 
     assert response.status_code == 422, response.text
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_line_remark_is_stored_per_line_and_trimmed(
+    logged_in_admin: tuple[TestClient, dict[str, Any]],
+    master_data: MasterDataFixture,
+) -> None:
+    client, identity = logged_in_admin
+    created = create_document(
+        client,
+        identity,
+        inbound_payload(
+            master_data,
+            lines=[
+                line(master_data, remark="  第一行备注  "),
+                line(master_data, material=master_data.material_second, remark=""),
+            ],
+        ),
+    )
+
+    assert created["lines"][0]["remark"] == "第一行备注"
+    assert created["lines"][1]["remark"] is None
+
+
+def test_line_remark_over_500_characters_is_rejected(
+    logged_in_admin: tuple[TestClient, dict[str, Any]],
+    master_data: MasterDataFixture,
+) -> None:
+    client, identity = logged_in_admin
+    payload = inbound_payload(
+        master_data,
+        lines=[line(master_data, remark="备" * 501)],
+    )
+
+    response = client.post("/api/v1/documents", json=payload, headers=csrf(identity))
+
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert "lines.0.remark" in error["details"]["items"][0]["field"]
 
 
 def test_outbound_line_with_manufacturer_is_rejected(
@@ -170,7 +209,7 @@ def test_inactive_project_blocks_save_and_submit_with_line_numbers(
 
     update = client.patch(
         f"/api/v1/documents/{created['id']}",
-        json={"version": 1, "remark": "修改"},
+        json={"version": 1},
         headers=csrf(identity),
     )
     assert update.status_code == 409, update.text
@@ -292,10 +331,9 @@ def test_inbound_submit_increases_stock_and_freezes_document(
         inbound_payload(
             master_data,
             lines=[
-                line(master_data, quantity="1.250"),
+                line(master_data, quantity="1.250", remark="多行入库"),
                 line(master_data, material=master_data.material_second, quantity="2"),
             ],
-            remark="多行入库",
         ),
     )
 
@@ -331,7 +369,7 @@ def test_inbound_submit_increases_stock_and_freezes_document(
 
     modify = client.patch(
         f"/api/v1/documents/{created['id']}",
-        json={"version": 2, "remark": "生效后修改"},
+        json={"version": 2},
         headers=csrf(identity),
     )
     assert modify.status_code == 409
@@ -538,7 +576,7 @@ def test_draft_update_delete_version_and_operator_permissions(
 
     stale = client.patch(
         f"/api/v1/documents/{created['id']}",
-        json={"version": 2, "remark": "过期版本"},
+        json={"version": 2},
         headers=csrf(identity),
     )
     assert stale.status_code == 409
@@ -550,15 +588,19 @@ def test_draft_update_delete_version_and_operator_permissions(
         created["id"],
         {
             "version": 1,
-            "remark": "  更新备注  ",
             "lines": [
-                line(master_data, quantity="2.500", project=master_data.project),
+                line(
+                    master_data,
+                    quantity="2.500",
+                    project=master_data.project,
+                    remark="  更新备注  ",
+                ),
                 line(master_data, material=master_data.material_second, quantity="1"),
             ],
         },
     )
     assert updated["version"] == 2
-    assert updated["remark"] == "更新备注"
+    assert updated["lines"][0]["remark"] == "更新备注"
     assert len(updated["lines"]) == 2
     assert updated["projects"][0]["project_id"] == str(master_data.project.id)
 
@@ -577,7 +619,7 @@ def test_draft_update_delete_version_and_operator_permissions(
     ):
         forbidden = operator_client.patch(
             f"/api/v1/documents/{created['id']}",
-            json={"version": 2, "remark": "越权"},
+            json={"version": 2},
             headers=csrf(operator_identity),
         )
         assert forbidden.status_code == 403
@@ -604,7 +646,7 @@ def test_draft_update_delete_version_and_operator_permissions(
             operator_client,
             operator_identity,
             own["id"],
-            {"version": 1, "remark": "本人修改"},
+            {"version": 1},
         )
         assert own_updated["version"] == 2
         own_delete = operator_client.request(

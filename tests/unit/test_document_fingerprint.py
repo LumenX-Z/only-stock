@@ -35,7 +35,6 @@ def _document(
         doc_type="INBOUND",
         warehouse_id=WAREHOUSE_ID,
         department_id=DEPARTMENT_ID,
-        remark=remark,
         lines=lines
         or (
             DocumentLineInput(
@@ -43,6 +42,7 @@ def _document(
                 quantity=quantity,
                 manufacturer_id=manufacturer_id,
                 project_id=project_id,
+                remark=remark,
             ),
         ),
     )
@@ -57,13 +57,17 @@ def test_fingerprint_is_sha256_hex() -> None:
     assert re.fullmatch(r"[0-9a-f]{64}", fingerprint)
 
 
-def test_remark_omitted_null_and_empty_share_fingerprint() -> None:
+def test_line_remark_omitted_null_and_empty_share_fingerprint() -> None:
     fingerprints = {
         _fingerprint(_document(remark=None)),
         _fingerprint(_document(remark="")),
         _fingerprint(_document(remark="   ")),
     }
     assert len(fingerprints) == 1
+
+
+def test_line_remark_participates_in_fingerprint() -> None:
+    assert _fingerprint(_document(remark="批次 A")) != _fingerprint(_document(remark="批次 B"))
 
 
 def test_quantity_1_and_1_0_share_fingerprint_but_change_when_different() -> None:
@@ -82,13 +86,13 @@ def test_omitted_and_null_optional_fields_share_fingerprint() -> None:
         doc_type="INBOUND",
         warehouse_id=WAREHOUSE_ID,
         department_id=DEPARTMENT_ID,
-        remark=None,
         lines=(
             DocumentLineInput(
                 material_id=MATERIAL_ID,
                 quantity="1.500",
                 manufacturer_id=None,
                 project_id=None,
+                remark=None,
             ),
         ),
     )

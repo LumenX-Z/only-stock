@@ -101,14 +101,14 @@ def _insert_legacy_posted_inbound(
             text(
                 """
                 INSERT INTO stock_documents (
-                    id, doc_no, doc_type, status, remark, warehouse_id, warehouse_code,
+                    id, doc_no, doc_type, status, warehouse_id, warehouse_code,
                     warehouse_name, department_id, department_code, department_name,
                     created_source, request_id, request_fingerprint, version, created_by,
                     created_by_name, submitted_by, submitted_by_name, created_at, updated_at,
                     submitted_at, deleted_at, deleted_by
                 )
                 SELECT
-                    :document_id, :doc_no, doc_type, status, remark, warehouse_id,
+                    :document_id, :doc_no, doc_type, status, warehouse_id,
                     warehouse_code, warehouse_name, department_id, department_code,
                     department_name, created_source, :request_id, request_fingerprint,
                     version, created_by, created_by_name, submitted_by, submitted_by_name,
@@ -255,7 +255,7 @@ def test_project_disable_blocks_save_and_submit_and_enable_restores(
 
     blocked_save = client.patch(
         f"/api/v1/documents/{draft['id']}",
-        json={"version": 1, "remark": "项目停用后的保存"},
+        json={"version": 1},
         headers=csrf(identity),
     )
     assert blocked_save.status_code == 409, blocked_save.text
@@ -299,7 +299,7 @@ def test_project_disable_blocks_save_and_submit_and_enable_restores(
 
     saved = client.patch(
         f"/api/v1/documents/{draft['id']}",
-        json={"version": 1, "remark": "项目重新启用后的保存"},
+        json={"version": 1},
         headers=csrf(identity),
     )
     assert saved.status_code == 200, saved.text

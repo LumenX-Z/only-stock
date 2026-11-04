@@ -71,6 +71,7 @@ def line(
     quantity: str = "1.250",
     manufacturer: Any = None,
     project: Any = None,
+    remark: str | None = None,
     include_manufacturer: bool = True,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -81,6 +82,8 @@ def line(
         payload["manufacturer_id"] = str((manufacturer or master.manufacturer).id)
     if project is not None:
         payload["project_id"] = str(project.id)
+    if remark is not None:
+        payload["remark"] = remark
     return payload
 
 
@@ -91,18 +94,14 @@ def inbound_payload(
     request_id: str | None = None,
     warehouse: Any = None,
     department: Any = None,
-    remark: str | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+    return {
         "request_id": request_id or str(uuid4()),
         "doc_type": "INBOUND",
         "warehouse_id": str((warehouse or master.warehouse).id),
         "department_id": str((department or master.department).id),
         "lines": lines,
     }
-    if remark is not None:
-        payload["remark"] = remark
-    return payload
 
 
 def outbound_payload(
@@ -112,7 +111,6 @@ def outbound_payload(
     request_id: str | None = None,
     warehouse: Any = None,
     department: Any = None,
-    remark: str | None = None,
 ) -> dict[str, Any]:
     payload = inbound_payload(
         master,
@@ -120,7 +118,6 @@ def outbound_payload(
         request_id=request_id,
         warehouse=warehouse,
         department=department,
-        remark=remark,
     )
     payload["doc_type"] = "OUTBOUND"
     for item in payload["lines"]:

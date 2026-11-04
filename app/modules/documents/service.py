@@ -30,7 +30,6 @@ from app.modules.documents.inputs import (
     DocumentInput,
     DocumentLineInput,
     PreparedLine,
-    normalize_remark,
     prepare_document,
     prepare_lines,
 )
@@ -64,13 +63,11 @@ class DocumentRecord:
 
 @dataclass(frozen=True, slots=True)
 class DocumentPatch:
-    """草稿修改的可编辑字段；``remark_provided`` 区分省略与显式清空。"""
+    """草稿修改的可编辑字段；明细整体替换时逐行备注随之更新。"""
 
     version: int
     warehouse_id: str | None = None
     department_id: str | None = None
-    remark: str | None = None
-    remark_provided: bool = False
     lines: tuple[DocumentLineInput, ...] | None = None
 
 
@@ -96,6 +93,7 @@ class ResolvedLine:
     manufacturer: Manufacturer | None
     project: Project | None
     quantity_milli: int
+    remark: str | None = None
 
 
 def create_draft(
@@ -131,7 +129,6 @@ def create_draft(
                 doc_no=doc_no,
                 doc_type=prepared.doc_type,
                 status=DocStatus.DRAFT.value,
-                remark=prepared.remark,
                 warehouse_id=warehouse.id,
                 warehouse_code=warehouse.code,
                 warehouse_name=warehouse.name,
@@ -202,7 +199,6 @@ def update_draft(
             patch.warehouse_id or document.warehouse_id,
             patch.department_id or document.department_id,
         )
-        remark = normalize_remark(patch.remark) if patch.remark_provided else document.remark
         if patch.lines is not None:
             prepared_lines = prepare_lines(document.doc_type, patch.lines)
         else:
@@ -215,7 +211,7 @@ def update_draft(
             # 草稿每次保存刷新项目等显示快照；名称本身不可修改，此处仅保持一致性。
             _refresh_line_snapshots(document, resolved_lines)
 
-        _apply_header(document, warehouse, department, remark)
+        _apply_header(document, warehouse, department)
         document.version = int(document.version) + 1
         document.updated_at = changed_at
         session.flush()
@@ -321,7 +317,7 @@ def submit_document(
             materials=materials,
         )
 
-        _apply_header(document, warehouse, department, document.remark)
+        _apply_header(document, warehouse, department)
         document.status = DocStatus.POSTED.value
         document.submitted_by = actor.id
         document.submitted_by_name = actor.display_name
@@ -733,6 +729,7 @@ def _resolve_lines(
                 manufacturer=manufacturer,
                 project=project,
                 quantity_milli=line.quantity_milli,
+                remark=line.remark,
             )
         )
 
@@ -844,6 +841,7 @@ def _line_model(resolved: ResolvedLine, line_no: int) -> StockDocumentLine:
         project_code=None if project is None else project.code,
         project_name=None if project is None else project.name,
         quantity_milli=resolved.quantity_milli,
+        remark=resolved.remark,
     )
 
 
@@ -883,7 +881,6 @@ def _apply_header(
     document: StockDocument,
     warehouse: Warehouse,
     department: Department,
-    remark: str | None,
 ) -> None:
     document.warehouse_id = warehouse.id
     document.warehouse_code = warehouse.code
@@ -891,7 +888,6 @@ def _apply_header(
     document.department_id = department.id
     document.department_code = department.code
     document.department_name = department.name
-    document.remark = remark
 
 
 def _prepared_from_existing(document: StockDocument) -> tuple[PreparedLine, ...]:
@@ -901,6 +897,7 @@ def _prepared_from_existing(document: StockDocument) -> tuple[PreparedLine, ...]
             manufacturer_id=line.manufacturer_id,
             project_id=line.project_id,
             quantity_milli=line.quantity_milli,
+            remark=line.remark,
         )
         for line in document.lines
     )

@@ -4,7 +4,7 @@
 - ``doc_type`` 仅 ``INBOUND`` / ``OUTBOUND``，``status`` 仅 ``DRAFT`` / ``POSTED``；
 - ``doc_no`` 唯一，``(created_by, request_id)`` 唯一，并建立
   ``(created_by, request_fingerprint, created_at)`` 索引供 MCP 窗口去重；
-- 明细保存物资、分类、厂家、项目、仓库与部门的显示快照；
+- 明细保存物资、分类、厂家、项目、仓库与部门的显示快照以及逐行备注；
 - 同一单据内同一物资在同一项目（空项目视为同一取值）下只能有一行；
 - 已生效单据、明细禁止更新或物理删除，数据库触发器作为服务层之外的第二道保护。
 
@@ -54,10 +54,6 @@ class StockDocument(Base):
             "created_source IN ('WEB', 'API', 'MCP')", name="ck_stock_documents_created_source"
         ),
         CheckConstraint("version >= 1", name="ck_stock_documents_version"),
-        CheckConstraint(
-            "remark IS NULL OR length(remark) <= 500",
-            name="ck_stock_documents_remark_length",
-        ),
         CheckConstraint("length(doc_no) BETWEEN 1 AND 32", name="ck_stock_documents_doc_no_length"),
         CheckConstraint(
             "(status = 'DRAFT' AND submitted_at IS NULL AND submitted_by IS NULL) "
@@ -93,7 +89,6 @@ class StockDocument(Base):
     doc_no: Mapped[str] = mapped_column(String(DOC_NO_MAX_LENGTH), nullable=False)
     doc_type: Mapped[str] = mapped_column(String(8), nullable=False)
     status: Mapped[str] = mapped_column(String(8), nullable=False, default=DocStatus.DRAFT.value)
-    remark: Mapped[str | None] = mapped_column(String(REMARK_MAX_LENGTH), nullable=True)
 
     warehouse_id: Mapped[str] = mapped_column(
         String(36),
@@ -171,6 +166,10 @@ class StockDocumentLine(Base):
         CheckConstraint(
             "length(unit) BETWEEN 1 AND 20", name="ck_stock_document_lines_unit_length"
         ),
+        CheckConstraint(
+            "remark IS NULL OR length(remark) <= 500",
+            name="ck_stock_document_lines_remark_length",
+        ),
         Index(
             "ux_stock_document_lines_document_material_project",
             "document_id",
@@ -243,6 +242,7 @@ class StockDocumentLine(Base):
     project_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     quantity_milli: Mapped[int] = mapped_column(Integer, nullable=False)
+    remark: Mapped[str | None] = mapped_column(String(REMARK_MAX_LENGTH), nullable=True)
 
     document: Mapped[StockDocument] = relationship(back_populates="lines")
 

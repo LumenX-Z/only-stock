@@ -153,8 +153,6 @@ def update_document_endpoint(
             version=payload.version,
             warehouse_id=None if payload.warehouse_id is None else str(payload.warehouse_id),
             department_id=None if payload.department_id is None else str(payload.department_id),
-            remark=payload.remark,
-            remark_provided="remark" in payload.model_fields_set,
             lines=(
                 None
                 if payload.lines is None
@@ -225,7 +223,6 @@ def _document_input(payload: DocumentCreate) -> DocumentInput:
         doc_type=payload.doc_type,
         warehouse_id=str(payload.warehouse_id),
         department_id=str(payload.department_id),
-        remark=payload.remark,
         lines=tuple(_line_input(line) for line in payload.lines),
     )
 
@@ -236,4 +233,5 @@ def _line_input(line: DocumentLineIn) -> DocumentLineInput:
         quantity=line.quantity,
         manufacturer_id=(None if line.manufacturer_id is None else str(line.manufacturer_id)),
         project_id=None if line.project_id is None else str(line.project_id),
+        remark=line.remark,
     )

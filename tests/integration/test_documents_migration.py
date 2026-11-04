@@ -8,11 +8,13 @@
 from uuid import uuid4
 
 import pytest
+from alembic import command
 from sqlalchemy import Engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
+from app.db.migrations import alembic_config
 from app.modules.documents.inputs import DocumentInput, DocumentLineInput
 from app.modules.documents.service import (
     create_draft,
@@ -62,14 +64,14 @@ def _document_row(
 _INSERT_DOCUMENT = text(
     """
     INSERT INTO stock_documents (
-        id, doc_no, doc_type, status, remark,
+        id, doc_no, doc_type, status,
         warehouse_id, warehouse_code, warehouse_name,
         department_id, department_code, department_name,
         created_source, request_id, request_fingerprint, version,
         created_by, created_by_name, submitted_by, submitted_by_name,
         created_at, updated_at, submitted_at, deleted_at, deleted_by
     ) VALUES (
-        :id, :doc_no, :doc_type, :status, NULL,
+        :id, :doc_no, :doc_type, :status,
         :warehouse_id, :warehouse_code, :warehouse_name,
         :department_id, :department_code, :department_name,
         :created_source, :request_id, :request_fingerprint, :version,
@@ -113,6 +115,7 @@ def _line_values(
         "project_code": None,
         "project_name": None,
         "quantity_milli": quantity_milli,
+        "remark": None,
     }
 
 
@@ -123,13 +126,13 @@ _INSERT_LINE = text(
         unit, quantity_type, category_code, category_name,
         parent_category_code, parent_category_name,
         manufacturer_id, manufacturer_code, manufacturer_name,
-        project_id, project_code, project_name, quantity_milli
+        project_id, project_code, project_name, quantity_milli, remark
     ) VALUES (
         :id, :document_id, :line_no, :material_id, :material_code, :material_name,
         :unit, :quantity_type, :category_code, :category_name,
         :parent_category_code, :parent_category_name,
         :manufacturer_id, :manufacturer_code, :manufacturer_name,
-        :project_id, :project_code, :project_name, :quantity_milli
+        :project_id, :project_code, :project_name, :quantity_milli, :remark
     )
     """
 )
@@ -184,7 +187,9 @@ def test_document_tables_columns_indexes_view_and_triggers_exist(
     assert "deleted_at" in document_columns
     assert "deleted_by" in document_columns
     assert "request_fingerprint" in document_columns
+    assert "remark" not in document_columns
     assert "quantity_milli" in line_columns
+    assert "remark" in line_columns
     assert "project_name" in line_columns
     assert "manufacturer_name" in line_columns
     assert "document_counters" in tables
@@ -229,7 +234,7 @@ def test_posted_documents_and_lines_are_immutable_and_not_physically_deleted(
 
     expected_errors = (
         (
-            "UPDATE stock_documents SET remark = '篡改' WHERE id = :id",
+            "UPDATE stock_documents SET warehouse_name = '篡改' WHERE id = :id",
             "posted stock document is immutable",
         ),
         (
@@ -300,6 +305,20 @@ def test_at_least_one_line_constraint_on_posted_transition(
                     "id": values["id"],
                 },
             )
+        session.rollback()
+
+
+def test_line_remark_length_is_enforced_by_database(
+    session_factory: sessionmaker[Session],
+    master_data: MasterDataFixture,
+) -> None:
+    values = _document_row(master_data)
+    with session_factory() as session:
+        session.execute(_INSERT_DOCUMENT, values)
+        line_values = _line_values(master_data, str(values["id"]), line_no=1)
+        line_values["remark"] = "备" * 501
+        with pytest.raises(IntegrityError, match="ck_stock_document_lines_remark_length"):
+            session.execute(_INSERT_LINE, line_values)
         session.rollback()
 
 
@@ -480,3 +499,46 @@ def test_inventory_view_counts_only_posted_and_not_deleted(
     deleted = soft_delete_document(session_factory, draft.document.id, actor=master_data.actor)
     assert deleted.document.deleted_at is not None
     assert balance() == 0
+
+
+def test_line_remark_round_trips_through_downgrade_and_upgrade(
+    settings: Settings,
+    session_factory: sessionmaker[Session],
+    master_data: MasterDataFixture,
+) -> None:
+    document = create_draft(
+        session_factory,
+        DocumentInput(
+            doc_type="INBOUND",
+            warehouse_id=master_data.warehouse.id,
+            department_id=master_data.department.id,
+            lines=(
+                DocumentLineInput(
+                    material_id=master_data.material.id,
+                    quantity="1",
+                    manufacturer_id=master_data.manufacturer.id,
+                    remark="迁移备注",
+                ),
+            ),
+        ),
+        actor=master_data.actor,
+        request_id=str(uuid4()),
+        timezone=settings.timezone,
+    ).document
+
+    config = alembic_config(settings)
+    command.downgrade(config, "0003_stock_documents")
+    with session_factory() as session:
+        header_remark = session.execute(
+            text("SELECT remark FROM stock_documents WHERE id = :id"),
+            {"id": document.id},
+        ).scalar_one()
+    assert header_remark == "迁移备注"
+
+    command.upgrade(config, "head")
+    with session_factory() as session:
+        line_remark = session.execute(
+            text("SELECT remark FROM stock_document_lines WHERE document_id = :id"),
+            {"id": document.id},
+        ).scalar_one()
+    assert line_remark == "迁移备注"

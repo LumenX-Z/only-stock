@@ -21,6 +21,7 @@ from app.modules.documents.models import DocType
 from app.modules.documents.service import get_document
 from app.modules.xlsx.constants import MAX_DATA_ROWS
 from app.modules.xlsx.export import build_export_bytes
+from app.modules.xlsx.options import load_template_options
 from app.modules.xlsx.parser import ParsedDocument, parse_document_entry
 from app.modules.xlsx.schemas import (
     ParseDocumentOut,
@@ -54,9 +55,13 @@ _UPLOAD_CHUNK = 1024 * 1024
 def download_document_template(
     doc_type: DocType,
     _auth: RequirePasswordChanged,
+    session: Annotated[Session, Depends(get_session)],
 ) -> Response:
     """动态生成入库或出库模板；两种角色均可下载。"""
-    data = build_template(doc_type.value)
+    data = build_template(
+        doc_type.value,
+        options=load_template_options(session, doc_type.value),
+    )
     ascii_name, chinese_name = template_filenames(doc_type.value)
     return _xlsx_response(data, ascii_name, chinese_name)
 

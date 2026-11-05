@@ -44,10 +44,16 @@ from app.modules.xlsx.archive import (
 )
 from app.modules.xlsx.constants import (
     ALLOWED_SHEETS,
+    COLUMN_TITLE_ROW,
     COLUMN_TITLES,
     FIRST_DATA_ROW,
     HEADER_DEPARTMENT_LABEL,
+    HEADER_DEPARTMENT_LABEL_COLUMN,
+    HEADER_DEPARTMENT_VALUE_COLUMN,
+    HEADER_ROW,
     HEADER_WAREHOUSE_LABEL,
+    HEADER_WAREHOUSE_LABEL_COLUMN,
+    HEADER_WAREHOUSE_VALUE_COLUMN,
     LEVEL1_COLUMN,
     LEVEL2_COLUMN,
     MANUFACTURER_COLUMN,
@@ -59,6 +65,7 @@ from app.modules.xlsx.constants import (
     PROJECT_COLUMN,
     QUANTITY_COLUMN,
     REMARK_COLUMN,
+    RESPONSIBLE_LABELS,
     SHEET_DATA,
     SHEET_HELP,
     SUCCESS_NOTICE,
@@ -66,7 +73,6 @@ from app.modules.xlsx.constants import (
     TEMPLATE_IDENTIFIER_LABEL,
     TEMPLATE_VERSION_LABEL,
     TEMPLATE_VERSIONS,
-    TITLE_ROW,
 )
 from app.modules.xlsx.errors import file_error
 from app.modules.xlsx.names import (
@@ -183,26 +189,39 @@ def parse_document_entry(
                 _validate_template_metadata(workbook, doc_type)
                 data_sheet = _require_worksheet(workbook, SHEET_DATA)
                 _validate_structure(data_sheet, expected_columns, doc_type)
+                responsible_row = _find_responsible_row(data_sheet, doc_type, len(expected_columns))
                 warehouse = _resolve_header_entity(
                     session,
-                    _header_value(data_sheet.cell(row=1, column=2), HEADER_WAREHOUSE_LABEL),
+                    _header_value(
+                        data_sheet.cell(row=HEADER_ROW, column=HEADER_WAREHOUSE_VALUE_COLUMN),
+                        HEADER_WAREHOUSE_LABEL,
+                    ),
                     Warehouse,
                     resource="warehouse",
                     label=HEADER_WAREHOUSE_LABEL,
                 )
                 department = _resolve_header_entity(
                     session,
-                    _header_value(data_sheet.cell(row=2, column=2), HEADER_DEPARTMENT_LABEL),
+                    _header_value(
+                        data_sheet.cell(row=HEADER_ROW, column=HEADER_DEPARTMENT_VALUE_COLUMN),
+                        HEADER_DEPARTMENT_LABEL,
+                    ),
                     Department,
                     resource="department",
                     label=HEADER_DEPARTMENT_LABEL,
                 )
-                scan = _scan_sheet(archive, workbook, expected_columns)
+                scan = _scan_sheet(
+                    archive,
+                    workbook,
+                    expected_columns,
+                    stop_before_row=responsible_row,
+                )
                 raw_rows, total_rows = _read_rows(
                     data_sheet,
                     expected_columns,
                     doc_type,
                     scan,
+                    stop_before_row=responsible_row,
                 )
                 if total_rows == 0:
                     raise _no_valid_rows(0)
@@ -341,49 +360,48 @@ def _validate_structure(sheet, columns: tuple[str, ...], doc_type: str) -> None:
     rows = list(
         sheet.iter_rows(
             min_row=1,
-            max_row=TITLE_ROW,
+            max_row=COLUMN_TITLE_ROW,
             max_col=max_column,
             values_only=False,
         )
     )
     header_rows = [list(row) + [EMPTY_CELL] * (max_column - len(row)) for row in rows]
-    while len(header_rows) < TITLE_ROW:
+    while len(header_rows) < COLUMN_TITLE_ROW:
         header_rows.append([EMPTY_CELL] * max_column)
-    first_row = header_rows[0]
-    second_row = header_rows[1]
-    title_row = header_rows[2]
+    header_row = header_rows[HEADER_ROW - 1]
+    column_title_row = header_rows[COLUMN_TITLE_ROW - 1]
 
-    if _cell_text(first_row[0]) != HEADER_WAREHOUSE_LABEL:
+    if _cell_text(header_row[HEADER_WAREHOUSE_LABEL_COLUMN - 1]) != HEADER_WAREHOUSE_LABEL:
         raise file_error(
             "XLSX_HEADER_INVALID",
             "表头区仓库名称标签缺失或位置不符",
-            items=[{"field": "A1", "expected": HEADER_WAREHOUSE_LABEL}],
+            items=[{"field": f"A{HEADER_ROW}", "expected": HEADER_WAREHOUSE_LABEL}],
         )
-    if _cell_text(second_row[0]) != HEADER_DEPARTMENT_LABEL:
+    if _cell_text(header_row[HEADER_DEPARTMENT_LABEL_COLUMN - 1]) != HEADER_DEPARTMENT_LABEL:
         raise file_error(
             "XLSX_HEADER_INVALID",
             "表头区管理部门名称标签缺失或位置不符",
-            items=[{"field": "A2", "expected": HEADER_DEPARTMENT_LABEL}],
+            items=[{"field": f"E{HEADER_ROW}", "expected": HEADER_DEPARTMENT_LABEL}],
         )
 
     if doc_type == DocType.OUTBOUND.value:
-        title_values = [_cell_text(cell) for cell in title_row]
+        title_values = [_cell_text(cell) for cell in column_title_row]
         if MANUFACTURER_COLUMN in title_values:
             raise file_error(
                 "XLSX_MANUFACTURER_COLUMN_FORBIDDEN",
                 "出库模板不允许出现厂家列",
-                items=[{"field": TITLE_ROW, "column": MANUFACTURER_COLUMN}],
+                items=[{"field": COLUMN_TITLE_ROW, "column": MANUFACTURER_COLUMN}],
             )
 
     for index, expected in enumerate(columns):
-        actual = _cell_text(title_row[index]) if index < len(title_row) else ""
+        actual = _cell_text(column_title_row[index]) if index < len(column_title_row) else ""
         if actual != expected:
             raise file_error(
                 "XLSX_COLUMNS_INVALID",
                 "明细列标题缺失、重复或顺序不符",
                 items=[
                     {
-                        "field": f"第 {TITLE_ROW} 行第 {index + 1} 列",
+                        "field": f"第 {COLUMN_TITLE_ROW} 行第 {index + 1} 列",
                         "expected": expected,
                         "actual": actual,
                     }
@@ -391,24 +409,56 @@ def _validate_structure(sheet, columns: tuple[str, ...], doc_type: str) -> None:
             )
 
     for index in range(len(columns), max_column):
-        if index < len(title_row) and _cell_text(title_row[index]):
+        if index < len(column_title_row) and _cell_text(column_title_row[index]):
             raise file_error(
                 "XLSX_COLUMNS_INVALID",
                 "明细列之后存在多余列标题",
-                items=[{"field": f"第 {TITLE_ROW} 行第 {index + 1} 列"}],
+                items=[{"field": f"第 {COLUMN_TITLE_ROW} 行第 {index + 1} 列"}],
             )
+
+
+def _find_responsible_row(sheet, doc_type: str, column_count: int) -> int | None:
+    """定位导出文件明细下方的责任栏；模板没有责任栏时返回 ``None``。"""
+    labels = dict(RESPONSIBLE_LABELS[doc_type])
+    required_columns = max(labels)
+    if column_count < required_columns:
+        return None
+    max_row = min(sheet.max_row or MAX_SHEET_SCAN_ROW, MAX_SHEET_SCAN_ROW)
+    if max_row < FIRST_DATA_ROW:
+        return None
+    for offset, row in enumerate(
+        sheet.iter_rows(
+            min_row=FIRST_DATA_ROW,
+            max_row=max_row,
+            max_col=required_columns,
+            values_only=True,
+        )
+    ):
+        values = [
+            _value_text(row[index]) if index < len(row) else "" for index in range(required_columns)
+        ]
+        if all(values[column_no - 1] == label for column_no, label in labels.items()):
+            return FIRST_DATA_ROW + offset
+    return None
 
 
 def _scan_sheet(
     archive: zipfile.ZipFile,
     workbook,
     columns: tuple[str, ...],
+    *,
+    stop_before_row: int | None,
 ) -> SheetScan:
     sheet_path = getattr(_require_worksheet(workbook, SHEET_DATA), "_worksheet_path", None)
     if not sheet_path:
         raise file_error("XLSX_WORKSHEET_INVALID", "无法读取录入数据工作表")
     try:
-        return scan_data_sheet(archive, str(sheet_path), expected_columns=len(columns))
+        return scan_data_sheet(
+            archive,
+            str(sheet_path),
+            expected_columns=len(columns),
+            stop_before_row=stop_before_row,
+        )
     except RowLimitExceeded as exc:
         raise _row_limit_error(exc.count) from exc
     except SparseRows as exc:
@@ -430,15 +480,22 @@ def _read_rows(
     columns: tuple[str, ...],
     doc_type: str,
     scan: SheetScan,
+    *,
+    stop_before_row: int | None,
 ) -> tuple[list[_RawRow], int]:
     raw_rows: list[_RawRow] = []
     total_rows = 0
     inbound = doc_type == DocType.INBOUND.value
+    max_row = MAX_SHEET_SCAN_ROW
+    if stop_before_row is not None:
+        max_row = min(max_row, stop_before_row - 1)
+    if max_row < FIRST_DATA_ROW:
+        return raw_rows, total_rows
 
     for offset, cells in enumerate(
         sheet.iter_rows(
             min_row=FIRST_DATA_ROW,
-            max_row=MAX_SHEET_SCAN_ROW,
+            max_row=max_row,
             max_col=len(columns),
             values_only=False,
         )
@@ -766,7 +823,10 @@ def _header_text(cell: Cell) -> str:
 
 
 def _cell_text(cell: Cell) -> str:
-    value = cell.value
+    return _value_text(cell.value)
+
+
+def _value_text(value) -> str:
     if value is None:
         return ""
     if not isinstance(value, str):

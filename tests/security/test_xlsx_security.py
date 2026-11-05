@@ -218,8 +218,8 @@ def test_xlsx_parse_rejects_row_limit(
 @pytest.mark.parametrize(
     ("mutation", "expected_code"),
     [
-        (lambda wb: setattr(wb["录入数据"]["A1"], "value", "错误标签"), "XLSX_HEADER_INVALID"),
-        (lambda wb: setattr(wb["录入数据"]["B1"], "value", "=1+1"), "XLSX_HEADER_INVALID"),
+        (lambda wb: setattr(wb["录入数据"]["A2"], "value", "错误标签"), "XLSX_HEADER_INVALID"),
+        (lambda wb: setattr(wb["录入数据"]["B2"], "value", "=1+1"), "XLSX_HEADER_INVALID"),
         (lambda wb: setattr(wb["录入数据"]["C3"], "value", "错误列"), "XLSX_COLUMNS_INVALID"),
         (lambda wb: setattr(wb["录入数据"]["I3"], "value", "多余列"), "XLSX_COLUMNS_INVALID"),
     ],
@@ -434,14 +434,14 @@ def test_xlsx_export_escapes_formula_text(
     workbook = load_workbook(BytesIO(response.content))
     sheet = workbook["录入数据"]
     assert workbook.sheetnames == ["录入数据", "填写说明", "单据信息"]
-    assert sheet["B1"].value == master_data.warehouse.name
-    assert sheet["B2"].value == master_data.department.name
+    assert sheet["B2"].value == master_data.warehouse.name
+    assert sheet["F2"].value == master_data.department.name
     for coordinate, expected in (
-        ("A4", "=项目公式"),
-        ("B4", "+分类公式"),
-        ("D4", "@物资公式"),
-        ("E4", "1.250"),
-        ("F4", "-厂家公式"),
+        ("A4", "+分类公式"),
+        ("C4", "@物资公式"),
+        ("D4", "1.250"),
+        ("E4", "-厂家公式"),
+        ("F4", "=项目公式"),
         ("G4", "=1+1"),
     ):
         cell = sheet[coordinate]

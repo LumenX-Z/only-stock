@@ -22,9 +22,10 @@ from app.modules.documents.service import (
 )
 from app.modules.masterdata.service import create_entity
 from app.modules.projects.models import Project
+from app.modules.xlsx.constants import SHEET_OPTIONS
 from tests.conftest import MasterDataFixture
 from tests.support import csrf, operator_session
-from tests.xlsx_support import XLSX_MIME, filled_workbook, upload_files
+from tests.xlsx_support import XLSX_MIME, filled_workbook, upload_files, write_rows
 
 
 def _inbound_input(master: MasterDataFixture, *, remark: str | None = "导出备注") -> DocumentInput:
@@ -88,7 +89,9 @@ def test_xlsx_template_download_both_roles(
         assert "attachment" in response.headers["content-disposition"]
         assert "filename*=UTF-8''" in response.headers["content-disposition"]
         workbook = load_workbook(BytesIO(response.content))
-        assert workbook.sheetnames == ["录入数据", "填写说明"]
+        assert workbook.sheetnames == ["录入数据", "填写说明", SHEET_OPTIONS]
+        assert workbook[SHEET_OPTIONS].sheet_state == "hidden"
+        assert workbook["录入数据"].data_validations.dataValidation
         help_values = _sheet_values(workbook, "填写说明")
         assert help_values["template_version"] == version
 
@@ -152,7 +155,7 @@ def test_xlsx_export_draft_uses_current_names_and_posted_uses_snapshot(
 
     draft_response = _export(client, record.document.id)
     draft_workbook = load_workbook(BytesIO(draft_response.content))
-    assert draft_workbook["录入数据"]["A4"].value == current_name
+    assert draft_workbook["录入数据"]["F4"].value == current_name
     assert _sheet_values(draft_workbook, "单据信息")["涉及项目"] == current_name
 
     submitted = submit_document(
@@ -165,7 +168,7 @@ def test_xlsx_export_draft_uses_current_names_and_posted_uses_snapshot(
     assert submitted.document.status == "POSTED"
     posted_response = _export(client, record.document.id)
     posted_workbook = load_workbook(BytesIO(posted_response.content))
-    assert posted_workbook["录入数据"]["A4"].value == master_data.project.name
+    assert posted_workbook["录入数据"]["F4"].value == master_data.project.name
     assert _sheet_values(posted_workbook, "单据信息")["涉及项目"] == master_data.project.name
 
 
@@ -256,7 +259,7 @@ def test_xlsx_export_over_2000_lines_is_allowed_but_marked(
     response = _export(client, record.document.id)
     assert response.headers["X-XLSX-Quick-Entry"] == "disabled"
     workbook = load_workbook(BytesIO(response.content))
-    assert workbook["录入数据"].max_row == 2004
+    assert workbook["录入数据"].max_row == 2006
     help_text = "\n".join(
         str(row[1].value or "")
         for row in workbook["填写说明"].iter_rows(min_row=1, max_row=40, max_col=2)
@@ -299,12 +302,9 @@ def test_xlsx_parse_accepts_downloaded_template_after_filling(
     assert template.status_code == 200
     workbook = load_workbook(BytesIO(template.content))
     data_sheet = workbook["录入数据"]
-    data_sheet["B1"] = master_data.warehouse.name
-    data_sheet["B2"] = master_data.department.name
-    for row_no, values in enumerate(rows, start=4):
-        for column, value in enumerate(values, start=1):
-            if value is not None:
-                data_sheet.cell(row=row_no, column=column, value=value)
+    data_sheet["B2"] = master_data.warehouse.name
+    data_sheet["F2"] = master_data.department.name
+    write_rows(data_sheet, doc_type, rows)
     buffer = BytesIO()
     workbook.save(buffer)
     response = client.post(

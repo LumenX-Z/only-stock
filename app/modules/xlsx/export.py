@@ -55,6 +55,7 @@ def build_export_bytes(
     )
     return build_document_export(
         doc_type=document.doc_type,
+        doc_no=document.doc_no,
         warehouse_name=warehouse_name,
         department_name=department_name,
         rows=rows,

@@ -135,6 +135,7 @@ def scan_data_sheet(
     sheet_path: str,
     *,
     expected_columns: int,
+    stop_before_row: int | None = None,
 ) -> SheetScan:
     """扫描“录入数据” XML，统计非空行并保存数值单元格原始词法。"""
     scan = SheetScan()
@@ -154,6 +155,10 @@ def scan_data_sheet(
 
                 row_number, column_number = _cell_position(element, current_row)
                 if row_number <= 0 or column_number <= 0:
+                    element.clear()
+                    continue
+
+                if stop_before_row is not None and row_number >= stop_before_row:
                     element.clear()
                     continue
 

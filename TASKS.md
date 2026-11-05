@@ -450,8 +450,8 @@ uv run pytest tests/recovery --collect-only
 
 - [x] **T6.1 XLSX 模板生成**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.1。
-  - 产出：入库/出库模板；“录入数据”“填写说明”工作表；前 2 行表头区（仓库、管理部门）；第 3 行明细列标题、第 4 行起明细；明细含逐行备注；版本 `INBOUND_V1`/`OUTBOUND_V1`。
-  - 完成：出库模板无厂家列；项目列逐行可选；备注逐行独立；表头区标签与位置固定；模板由服务端动态生成。
+  - 产出：入库/出库模板；“录入数据”“填写说明”及隐藏“下拉选项”工作表；第 1 行标题、第 2 行表头区（A2/B2 仓库、E2/F2 管理部门）、第 3 行明细列标题、第 4 行起明细；明细含逐行备注；版本 `INBOUND_V1`/`OUTBOUND_V1`。
+  - 完成：模板标题不带单号、不含责任栏；除数量/备注外提供仓库、部门、分类、物资、厂家、项目名称下拉；出库模板无厂家列；备注逐行独立；表头区标签与位置固定；模板由服务端动态生成。
 
 - [x] **T6.2 只读解析与文件防护**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.1、7.8.3；[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md) 11.1。
@@ -475,8 +475,8 @@ uv run pytest tests/recovery --collect-only
 
 - [x] **T6.6 单张单据导出**
   - 依据：[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md) 7.8.5。
-  - 产出：`GET /documents/{id}/export`；“录入数据/填写说明/单据信息”；表头区布局；逐行备注；草稿当前资料、生效单快照；文件名安全编码。
-  - 完成：导出不改变状态；超过 2,000 行提示不可快速录入；用户文本不以公式解释；数量以文本写入。
+  - 产出：`GET /documents/{id}/export`；“录入数据/填写说明/单据信息”；标题含正式单号；表头区布局；逐行备注；明细下方 4 个空姓名责任栏；草稿当前资料、生效单快照；文件名安全编码。
+  - 完成：导出不改变状态；导出文件可再次解析且忽略责任栏；超过 2,000 行提示不可快速录入；用户文本不以公式解释；数量以文本写入。
 
 - [x] **T6.7 模板与导出安全测试**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 13.8。
@@ -795,3 +795,4 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | T8.7 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e/test_pages_system.py tests/integration/test_backups_api.py -q`（6 passed） | 通过：审计页仅 CA 可用，支持对象/动作/来源/日期筛选、分页与变更快照；备份页仅 CA 可用，手动创建在线备份集、展示时间/状态/大小/SHA-256/完整性结果；备份失败返回明确错误并记录失败集，不以“已执行”代替成功；新增 `GET/POST /api/v1/backups`，OP 调用返回 403；备份集含 `inventory.sqlite3`、`manifest.json`、`integrity-report.json`，`integrity_check=ok`，成功集按保留数量清理 | 依据 `docs/12` 9.1、9.2、9.9，`docs/10` 8.4，`docs/13` 10.6；新增 `app/modules/backups/service.py`、`router.py`、`schemas.py`、`app/pages/audit_backup_pages.py` 与模板 |
 | 2026-11-04 | T8.8 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/e2e -q`（16 passed）；`uv run pytest tests/security -q`（44 passed） | 通过：覆盖登录→强制改密→建用户→建六类资料→入库→出库→停用/启用→软删除→API Key 主路径；CA/OP 交叉权限（管理页面、基础资料写操作、单据本人/他人、API Key 隔离）全部被正确拒绝或允许；页面关键提示（不计入库存、提交确认、库存不足行号、部分填入、阻碍项、一次性 Key、备份失败）符合文档 | 依据 `docs/15` 12.1，`docs/16` 13.1、13.5；新增 `tests/e2e/` 6 个测试文件与 `tests/page_support.py` |
 | 2026-11-04 | P8 门禁 | `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/e2e`；`uv run pytest tests/security`；另执行 `uv run pytest -q` | 通过：Ruff 0 告警、210 个文件格式一致；e2e 16 passed；security 44 passed；全量 536 passed | 依据 `TASKS.md` P8 阶段门禁；页面与 API 共用服务层和权限组件，页面路由不进入 OpenAPI；新增备份 API 后 OpenAPI 契约测试 23 passed；未放宽既有安全与库存约束 |
+| 2026-11-05 | T6.1/T6.2/T6.5/T6.6（模板与导出格式对齐） | `uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit/test_xlsx_templates.py tests/unit/test_xlsx_parser.py tests/unit/test_xlsx_performance.py tests/integration/test_xlsx_api.py tests/security/test_xlsx_security.py tests/e2e/test_pages_documents.py -q`（77 passed）；`uv run pytest -q`（543 passed） | 通过：`录入数据`标题改为不带单号的“入库单/出库单”，第 2 行 A2/B2 仓库、E2/F2 管理部门，列顺序改为一级分类、二级分类、物资、数量、厂家、项目、备注（出库无厂家）；列宽、行高、合并单元格、宋体字号、居中与细边框按上传模板对齐，未额外添加填充色；模板不含责任栏；隐藏“下拉选项”表提供仓库、部门、一级/二级分类、物资、厂家、项目名称数据有效性；导出标题追加正式单号，明细下方空一行保留 4 个空姓名责任栏；解析导出文件时忽略责任栏及其后内容 | 依据 `docs/07` 7.8.1、7.8.5，`docs/11` 8.5，`docs/12` 第 9 章，`docs/16` ACC-XLSX-001/010；新增 `app/modules/xlsx/options.py`，模板布局常量集中在 `constants.py`，解析与生成共用列定义；测试夹具按语义字段写入实际列 |

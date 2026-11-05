@@ -1,8 +1,11 @@
 """XLSX 模板布局、版本与安全限制。
 
 依据 docs/07-XLSX模板、快速录入与导出.md 7.8.1、7.8.3：
-- “录入数据”前 2 行为仓库、管理部门表头区，第 3 行为明细列标题，第 4 行起为明细；
+- “录入数据”第 1 行为单据标题，第 2 行为仓库、管理部门表头区，
+  第 3 行为明细列标题，第 4 行起为明细；
 - 入库列含厂家，出库无厂家列，备注均为最后一列；
+- 模板填写区除数量、备注外提供下拉选项，下拉来源写入隐藏的“下拉选项”表；
+- 模板不含责任栏，单张单据导出保留 4 个空姓名责任栏；
 - 入库/出库模板版本分别为 ``INBOUND_V1`` / ``OUTBOUND_V1``；
 - 上传限制 5 MiB、2,000 非空数据行，并校验解压尺寸与工作簿结构。
 """
@@ -12,6 +15,7 @@ from app.modules.documents.models import DocType
 SHEET_DATA = "录入数据"
 SHEET_HELP = "填写说明"
 SHEET_INFO = "单据信息"
+SHEET_OPTIONS = "下拉选项"
 
 TEMPLATE_IDENTIFIER_LABEL = "模板标识"
 TEMPLATE_IDENTIFIER = "ONLY-STOCK"
@@ -22,10 +26,21 @@ TEMPLATE_VERSIONS: dict[str, str] = {
     DocType.OUTBOUND.value: "OUTBOUND_V1",
 }
 
+# 标题行只写单据类型；导出时在标题中追加正式单号。
+DOCUMENT_TITLE_LABELS: dict[str, str] = {
+    DocType.INBOUND.value: "入库单",
+    DocType.OUTBOUND.value: "出库单",
+}
+
 HEADER_WAREHOUSE_LABEL = "仓库名称"
 HEADER_DEPARTMENT_LABEL = "管理部门名称"
-HEADER_LAST_ROW = 2
-TITLE_ROW = 3
+HEADER_ROW = 2
+HEADER_WAREHOUSE_LABEL_COLUMN = 1
+HEADER_WAREHOUSE_VALUE_COLUMN = 2
+HEADER_DEPARTMENT_LABEL_COLUMN = 5
+HEADER_DEPARTMENT_VALUE_COLUMN = 6
+DOCUMENT_TITLE_ROW = 1
+COLUMN_TITLE_ROW = 3
 FIRST_DATA_ROW = 4
 
 PROJECT_COLUMN = "项目名称"
@@ -37,26 +52,53 @@ MANUFACTURER_COLUMN = "厂家名称"
 REMARK_COLUMN = "备注"
 
 INBOUND_COLUMNS: tuple[str, ...] = (
-    PROJECT_COLUMN,
     LEVEL1_COLUMN,
     LEVEL2_COLUMN,
     MATERIAL_COLUMN,
     QUANTITY_COLUMN,
     MANUFACTURER_COLUMN,
+    PROJECT_COLUMN,
     REMARK_COLUMN,
 )
 OUTBOUND_COLUMNS: tuple[str, ...] = (
-    PROJECT_COLUMN,
     LEVEL1_COLUMN,
     LEVEL2_COLUMN,
     MATERIAL_COLUMN,
     QUANTITY_COLUMN,
+    PROJECT_COLUMN,
     REMARK_COLUMN,
 )
 
 COLUMN_TITLES: dict[str, tuple[str, ...]] = {
     DocType.INBOUND.value: INBOUND_COLUMNS,
     DocType.OUTBOUND.value: OUTBOUND_COLUMNS,
+}
+
+# 导出文件保留的责任栏标签及列位置；模板不写责任栏。
+RESPONSIBLE_LABELS: dict[str, tuple[tuple[int, str], ...]] = {
+    DocType.INBOUND.value: (
+        (1, "送货人："),
+        (3, "接收人："),
+        (5, "审核人："),
+        (6, "批准人："),
+    ),
+    DocType.OUTBOUND.value: (
+        (1, "领用人："),
+        (3, "出库人："),
+        (5, "审核人："),
+        (6, "批准人："),
+    ),
+}
+
+# 下拉字段的稳定英文后缀，用于定义名称。
+OPTION_FIELDS: dict[str, str] = {
+    HEADER_WAREHOUSE_LABEL: "WAREHOUSE",
+    HEADER_DEPARTMENT_LABEL: "DEPARTMENT",
+    PROJECT_COLUMN: "PROJECT",
+    LEVEL1_COLUMN: "LEVEL1",
+    LEVEL2_COLUMN: "LEVEL2",
+    MATERIAL_COLUMN: "MATERIAL",
+    MANUFACTURER_COLUMN: "MANUFACTURER",
 }
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -74,7 +116,7 @@ MAX_RAW_NUMERIC_CELLS = 100_000
 MAX_RELATIONSHIP_BYTES = 1024 * 1024
 MAX_METADATA_ROWS = 30
 
-ALLOWED_SHEETS = frozenset({SHEET_DATA, SHEET_HELP, SHEET_INFO})
+ALLOWED_SHEETS = frozenset({SHEET_DATA, SHEET_HELP, SHEET_INFO, SHEET_OPTIONS})
 
 PARTIAL_NOTICE = "部分明细未填入，请核对后再保存或提交"
 SUCCESS_NOTICE = "全部明细已填入，可继续编辑后保存或提交"

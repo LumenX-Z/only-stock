@@ -15,6 +15,7 @@ from app.errors import AppError
 from app.modules.masterdata.service import create_entity, set_entity_active
 from app.modules.xlsx.archive import SheetScan
 from app.modules.xlsx.parser import parse_document_entry
+from app.modules.xlsx.templates import ExportRow, build_document_export
 from tests.conftest import MasterDataFixture
 from tests.xlsx_support import edit_workbook, filled_workbook
 
@@ -877,11 +878,12 @@ def test_xlsx_parse_empty_file_is_file_level(
 @pytest.mark.parametrize(
     ("mutation", "expected_code"),
     [
-        (lambda wb: setattr(wb["录入数据"]["A1"], "value", "错误标签"), "XLSX_HEADER_INVALID"),
         (lambda wb: setattr(wb["录入数据"]["A2"], "value", "错误标签"), "XLSX_HEADER_INVALID"),
-        (lambda wb: setattr(wb["录入数据"]["B1"], "value", "=1+1"), "XLSX_HEADER_INVALID"),
-        (lambda wb: setattr(wb["录入数据"]["B1"], "value", None), "WAREHOUSE_REQUIRED"),
-        (lambda wb: setattr(wb["录入数据"]["B1"], "value", "不存在仓库"), "WAREHOUSE_NOT_FOUND"),
+        (lambda wb: setattr(wb["录入数据"]["E2"], "value", "错误标签"), "XLSX_HEADER_INVALID"),
+        (lambda wb: setattr(wb["录入数据"]["B2"], "value", "=1+1"), "XLSX_HEADER_INVALID"),
+        (lambda wb: setattr(wb["录入数据"]["B2"], "value", None), "WAREHOUSE_REQUIRED"),
+        (lambda wb: setattr(wb["录入数据"]["B2"], "value", "不存在仓库"), "WAREHOUSE_NOT_FOUND"),
+        (lambda wb: setattr(wb["录入数据"]["F2"], "value", "不存在部门"), "DEPARTMENT_NOT_FOUND"),
         (lambda wb: setattr(wb["录入数据"]["D3"], "value", "错误列"), "XLSX_COLUMNS_INVALID"),
         (lambda wb: setattr(wb["录入数据"]["H3"], "value", "多余列"), "XLSX_COLUMNS_INVALID"),
     ],
@@ -1007,7 +1009,7 @@ def test_xlsx_parse_outbound_manufacturer_column_is_file_level(
     )
 
     def add_manufacturer(workbook) -> None:
-        workbook["录入数据"]["F3"] = "厂家名称"
+        workbook["录入数据"]["E3"] = "厂家名称"
 
     with session_factory() as session:
         with pytest.raises(AppError) as raised:
@@ -1031,6 +1033,38 @@ def test_xlsx_parse_does_not_change_master_data_or_documents(
         _parse(tmp_path, "INBOUND", data, session)
         _parse(tmp_path, "INBOUND", data, session)
     assert _counts(session_factory) == before
+
+
+def test_xlsx_parse_export_ignores_responsible_row(
+    tmp_path: Path,
+    session_factory: sessionmaker[Session],
+    master_data: MasterDataFixture,
+) -> None:
+    data = build_document_export(
+        doc_type="INBOUND",
+        doc_no="RK20261105-000001",
+        warehouse_name=master_data.warehouse.name,
+        department_name=master_data.department.name,
+        rows=[
+            ExportRow(
+                project_name=master_data.project.name,
+                level1_name=master_data.category.name,
+                level2_name=master_data.category_child.name,
+                material_name=master_data.material.name,
+                quantity="1.250",
+                manufacturer_name=master_data.manufacturer.name,
+                remark="导出后再次解析",
+            )
+        ],
+        info_rows=[("正式单号", "RK20261105-000001")],
+    )
+    with session_factory() as session:
+        parsed = _parse(tmp_path, "INBOUND", data, session)
+
+    assert parsed.status == "SUCCESS"
+    assert parsed.total_rows == 1
+    assert len(parsed.lines) == 1
+    assert parsed.lines[0].remark == "导出后再次解析"
 
 
 def _counts(session_factory: sessionmaker[Session]) -> dict[str, int]:

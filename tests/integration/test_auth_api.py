@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.account import reset_password
 from app.auth.models import ApiKey, AuthSession
-from app.auth.sessions import hash_secret
+from app.auth.sessions import SESSION_COOKIE_NAME, hash_secret
 from app.config import Settings
 from app.db.types import utc_now
 from app.modules.users.models import User, UserStatus
@@ -118,6 +118,17 @@ def test_me_requires_authentication(admin_client: TestClient) -> None:
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+def test_unauthenticated_api_clears_stale_session_cookie(admin_client: TestClient) -> None:
+    admin_client.cookies.set(SESSION_COOKIE_NAME, "stale-session-token")
+
+    response = admin_client.get("/auth/me")
+
+    assert response.status_code == 401
+    cleared = response.headers["set-cookie"].lower()
+    assert SESSION_COOKIE_NAME in cleared
+    assert "max-age=0" in cleared
 
 
 def test_logout_revokes_session_and_clears_cookie(

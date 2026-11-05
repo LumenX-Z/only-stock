@@ -11,6 +11,7 @@ from app.auth.account import change_password
 from app.auth.login import login as perform_login
 from app.auth.sessions import (
     SESSION_COOKIE_NAME,
+    authenticate_session,
     clear_session_cookie,
     revoke_session,
     set_session_cookie,
@@ -18,6 +19,7 @@ from app.auth.sessions import (
 from app.db.database import get_session
 from app.db.types import utc_now
 from app.errors import AppError
+from app.modules.users.models import UserStatus
 from app.pages import common
 from app.pages.dependencies import PageRawAuth, PageUser, check_page_csrf
 from app.pages.templating import render
@@ -36,15 +38,30 @@ def _safe_next(value: str | None) -> str:
 
 
 @router.get("/login")
-def login_page(request: Request) -> Response:
-    if SESSION_COOKIE_NAME in request.cookies:
-        return RedirectResponse(url="/", status_code=303)
-    return render(
+def login_page(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+) -> Response:
+    raw_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if raw_token:
+        authenticated = authenticate_session(
+            session, raw_token, request.app.state.settings, now=utc_now()
+        )
+        if authenticated is not None and authenticated.user.status == UserStatus.ACTIVE.value:
+            session.commit()
+            return RedirectResponse(url="/", status_code=303)
+        if authenticated is not None:
+            revoke_session(authenticated.session, utc_now())
+        session.commit()
+    response = render(
         request,
         "login.html",
         next_url=_safe_next(request.query_params.get("next")),
         form={},
     )
+    if raw_token:
+        clear_session_cookie(response)
+    return response
 
 
 @router.post("/login")

@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.auth.sessions import SESSION_COOKIE_NAME
 from app.modules.users.models import Role
 from tests.page_support import change_password_page, login_page, post_page
 from tests.support import operator_session
@@ -24,6 +25,37 @@ def test_login_page_redirects_and_shows_errors(client: TestClient) -> None:
     wrong = login_page(client, "admin", "wrong-password-123")
     assert wrong.status_code == 401
     assert "登录名或密码不正确" in wrong.text
+
+
+def test_stale_session_cookie_does_not_loop_between_login_and_dashboard(
+    client: TestClient,
+) -> None:
+    client.cookies.set(SESSION_COOKIE_NAME, "stale-session-token")
+
+    landing = client.get("/", follow_redirects=False)
+    assert landing.status_code == 303
+    assert landing.headers["location"] == "/login?next=/"
+    cleared = landing.headers["set-cookie"].lower()
+    assert SESSION_COOKIE_NAME in cleared
+    assert "max-age=0" in cleared
+
+    # 浏览器可能已按 Set-Cookie 删除该值，重新放入以验证登录页不会再次重定向。
+    client.cookies.set(SESSION_COOKIE_NAME, "stale-session-token")
+    page = client.get("/login", follow_redirects=False)
+    assert page.status_code == 200
+    assert "欢迎回来" in page.text
+    cleared = page.headers["set-cookie"].lower()
+    assert SESSION_COOKIE_NAME in cleared
+    assert "max-age=0" in cleared
+
+
+def test_login_page_redirects_active_session_to_dashboard(
+    logged_in_admin: tuple[TestClient, dict[str, Any]],
+) -> None:
+    client, _identity = logged_in_admin
+    response = client.get("/login", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
 
 
 def test_forced_password_change_flow(

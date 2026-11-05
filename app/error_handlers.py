@@ -10,10 +10,11 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.auth.sessions import SESSION_COOKIE_NAME, clear_session_cookie
 from app.db.sqlite import is_busy_error
 from app.errors import AppError, error_payload
 from app.request_context import get_request_id
@@ -56,12 +57,14 @@ def register_error_handlers(app: FastAPI) -> None:
         )
         if _is_page_request(request):
             if exc.code == "UNAUTHORIZED":
-                return _page_login_redirect(request)
+                response = _page_login_redirect(request)
+                _clear_stale_session_cookie(request, response)
+                return response
             if exc.code == "PASSWORD_CHANGE_REQUIRED":
                 return RedirectResponse(url="/change-password", status_code=303)
             from app.pages.templating import render_error_page
 
-            return render_error_page(
+            response = render_error_page(
                 request,
                 status_code=exc.status_code,
                 code=exc.code,
@@ -69,7 +72,10 @@ def register_error_handlers(app: FastAPI) -> None:
                 request_id=request_id,
                 details={"resource": exc.resource, "items": list(exc.items)},
             )
-        return JSONResponse(
+            if exc.code == "ACCOUNT_DISABLED":
+                _clear_stale_session_cookie(request, response)
+            return response
+        response = JSONResponse(
             status_code=exc.status_code,
             content=error_payload(
                 code=exc.code,
@@ -79,6 +85,11 @@ def register_error_handlers(app: FastAPI) -> None:
                 items=exc.items,
             ),
         )
+        if exc.code in {"UNAUTHORIZED", "ACCOUNT_DISABLED"} and request.url.path.startswith(
+            ("/api/", "/auth/")
+        ):
+            _clear_stale_session_cookie(request, response)
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def _handle_validation_error(
@@ -217,6 +228,12 @@ def _is_page_request(request: Request) -> bool:
         return False
     path = request.url.path
     return not path.startswith(_PAGE_EXCLUDED_PREFIXES)
+
+
+def _clear_stale_session_cookie(request: Request, response: Response) -> None:
+    """错误响应中的 Cookie 删除头必须写在最终响应上，不能依赖被替换的 Response。"""
+    if request.cookies.get(SESSION_COOKIE_NAME):
+        clear_session_cookie(response)
 
 
 def _page_login_redirect(request: Request) -> RedirectResponse:

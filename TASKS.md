@@ -54,7 +54,7 @@ P0–P5 是主路径；P6 与 P7 可在 P4/P5 稳定后并行；P8 依赖 P3–P
 | P6 XLSX 模板、快速录入与导出 | [05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md)、[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md)、[11-单据与库存业务API.md](docs/11-单据与库存业务API.md)、[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md)、[16-验收标准.md](docs/16-验收标准.md) | 6.8；7.8–7.8.5；8.5；11.1、11.3；13.7、13.8 |
 | P7 MCP 服务与工具 | [02-技术架构与代码组织.md](docs/02-技术架构与代码组织.md)、[04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md)、[05-数据模型与实体约束.md](docs/05-数据模型与实体约束.md)、[06-库存计算与单据业务流程.md](docs/06-库存计算与单据业务流程.md)、[08-MCP服务与工具.md](docs/08-MCP服务与工具.md)、[15-测试方案.md](docs/15-测试方案.md)、[16-验收标准.md](docs/16-验收标准.md) | 3.1；5.5、5.6；6.2、6.4；7.3、7.4；7.9、8.6–8.6.5；12.1；13.9 |
 | P8 页面、API 契约与端到端 | [04-认证、会话与凭证安全.md](docs/04-认证、会话与凭证安全.md)、[07-XLSX模板、快速录入与导出.md](docs/07-XLSX模板、快速录入与导出.md)、[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md)、[10-账户、基础资料与系统维护API.md](docs/10-账户、基础资料与系统维护API.md)、[11-单据与库存业务API.md](docs/11-单据与库存业务API.md)、[12-页面与交互要求.md](docs/12-页面与交互要求.md)、[15-测试方案.md](docs/15-测试方案.md)、[16-验收标准.md](docs/16-验收标准.md) | 5.5；7.8.4；8.1、8.2；8.3、8.4；8.5；第 9 章；12.1；13.1、13.5 |
-| P9 部署、备份恢复、性能与验收 | [09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md)、[13-Docker部署与运维.md](docs/13-Docker部署与运维.md)、[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md)、[16-验收标准.md](docs/16-验收标准.md)、[17-需求追踪矩阵.md](docs/17-需求追踪矩阵.md)、[18-实施顺序与完成定义.md](docs/18-实施顺序与完成定义.md) | 8.7；10.1–10.7；11.3；第 13 章；第 14 章；15.2 |
+| P9 部署、备份恢复、性能与验收 | [09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md)、[13-Docker部署与运维.md](docs/13-Docker部署与运维.md)、[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md)、[16-验收标准.md](docs/16-验收标准.md)、[17-需求追踪矩阵.md](docs/17-需求追踪矩阵.md)、[18-实施顺序与完成定义.md](docs/18-实施顺序与完成定义.md)、[19-验收与发布记录.md](docs/19-验收与发布记录.md) | 8.7；10.1–10.7；11.3；第 13 章；第 14 章；15.2；第 16 章 |
 
 ## 质量门禁与记录方式
 
@@ -616,47 +616,47 @@ uv run pytest tests/security
 
 完成可重复部署、备份恢复、性能基线和全部验收证据，发布 `only-stock:0.1.0` 镜像，达到发布完成定义。
 
-- [ ] **T9.1 Dockerfile**
+- [x] **T9.1 Dockerfile**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.3；[AGENTS.md](AGENTS.md) 第 8 节。
   - 产出：Python 3.13 精简镜像；uv 锁定依赖安装；非 root；包含迁移/备份/恢复 CLI；不写入 `.env`/数据库/备份/初始密码。
   - 完成：镜像 `only-stock:0.1.0` 可构建；无硬编码密码/API Key；依赖漏洞和镜像安全检查完成。
 
-- [ ] **T9.2 Compose 服务与卷**
+- [x] **T9.2 Compose 服务与卷**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.1、10.2。
   - 产出：单个 `app` 服务；端口 `8000`；`inventory_data`、`inventory_backups` 卷；健康检查；单 worker。
   - 完成：`docker compose config` 通过；服务启动、健康检查、页面/API/MCP 可访问；无反向代理/HTTPS/多副本。
 
-- [ ] **T9.3 首次启动与配置**
+- [x] **T9.3 首次启动与配置**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.4。
   - 产出：`.env` 示例/检查清单；初始管理员变量；首次登录改密；MCP 地址与允许 Host 配置。
   - 完成：空库首次启动创建管理员；重复启动不重复；初始化后移除初始密码；首次登录强制改密。
 
-- [ ] **T9.4 每日/手动备份**
+- [x] **T9.4 每日/手动备份**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.6。
   - 产出：APScheduler 每日 02:00 备份；SQLite Online Backup API；`integrity_check`；`manifest.json`；成功后原子重命名；保留最近 7 个成功集。
   - 完成：失败不计入可恢复集；手动备份与定时备份同等计数；清理失败不影响新备份；页面/API 可查看状态。
 
-- [ ] **T9.5 离线恢复与回滚**
+- [x] **T9.5 离线恢复与回滚**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.7。
   - 产出：`app.cli backup list`、`restore --backup-set`、`restore --rollback-from`；manifest/哈希/完整性校验；恢复前移动 `-wal`/`-shm` 到恢复区。
   - 完成：恢复前必须停 app；失败不覆盖当前库；恢复后 health/登录/库存/单据/MCP 验证；隔离环境演练记录。
 
-- [ ] **T9.6 升级、迁移失败与就绪**
+- [x] **T9.6 升级、迁移失败与就绪**
   - 依据：[13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.5；[09-HTTP-API通用约定与健康检查.md](docs/09-HTTP-API通用约定与健康检查.md) 8.7。
   - 产出：单迁移执行器；迁移版本/时间/结果记录；迁移失败 readiness 失败；不可逆迁移的恢复策略。
   - 完成：升级前完整备份；迁移失败停止业务写入；回滚前确认可逆性或按备份恢复。
 
-- [ ] **T9.7 性能与容量**
+- [x] **T9.7 性能与容量**
   - 依据：[14-安全、可靠性与性能要求.md](docs/14-安全、可靠性与性能要求.md) 11.3；[16-验收标准.md](docs/16-验收标准.md) 13.7。
   - 产出：10 万有效明细数据集；查询计划；10 并发/5 分钟压测；2,000 行 XLSX 解析/导出基准。
   - 完成：P95 ≤2 秒、错误率 <0.1%；XLSX ≤10 秒；无全表扫描/无界内存增长；不达标时有经确认的优化或调整结论。
 
-- [ ] **T9.8 验收与追踪**
+- [x] **T9.8 验收与追踪**
   - 依据：[16-验收标准.md](docs/16-验收标准.md) 第 13 章；[17-需求追踪矩阵.md](docs/17-需求追踪矩阵.md)。
   - 产出：ACC-ROLE/DATA/FLOW/STORAGE/API/OPS/PERF/XLSX/MCP 全部条目执行记录；需求→章节→验收追踪核对。
   - 完成：核心条目全部通过；失败项有修复记录或明确不验收结论；证据可复现。
 
-- [ ] **T9.9 发布检查**
+- [x] **T9.9 发布检查**
   - 依据：[18-实施顺序与完成定义.md](docs/18-实施顺序与完成定义.md) 15.2。
   - 产出：发布检查清单、镜像版本（`only-stock:0.1.0`）、迁移版本、OpenAPI、部署说明、测试报告。
   - 完成：镜像无硬编码密码/Key；日志无敏感信息；初始密码已移除；OpenAPI/迁移/部署文档/镜像版本（`only-stock:0.1.0`）一致；TASKS 全部关闭。
@@ -677,19 +677,19 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 
 只有同时满足以下条件，才能将项目标记为完成：
 
-- [ ] P0–P9 全部任务完成，阻塞项清零。
-- [ ] [16-验收标准.md](docs/16-验收标准.md) 的 `ACC-ROLE`、`ACC-DATA`、`ACC-FLOW`、`ACC-STORAGE`、`ACC-API`、`ACC-OPS`、`ACC-PERF`、`ACC-XLSX`、`ACC-MCP` 核心条目全部通过。
-- [ ] 并发负库存、软删除负库存、余额上限、重复提交、故障回滚测试通过。
-- [ ] 六类 `code` 自动生成、并发唯一、不可修改、停用/删除不复用测试通过。
-- [ ] 分类删除/停用边界、六类名称唯一与规范化查重、启用上级校验测试通过。
-- [ ] XLSX 模板、部分填入、无副作用解析、原始数值精度、导出与安全测试通过。
-- [ ] MCP 12/7 工具清单、越权拒绝、`code`/`doc_no` 定位、无内部 ID、原子提交、300 秒去重、限流与 Origin/Host 测试通过。
-- [ ] 备份恢复演练成功，恢复后库存/单据一致；最近 7 个成功集清理、离线恢复与回滚命令可执行。
-- [ ] 10 万明细性能达到基线，或形成经确认的调整结论。
-- [ ] `uv run pytest` 全量通过；`uv sync --locked` 可复现环境。
-- [ ] `uv run ruff check .` 与 `uv run ruff format --check .` 全量通过；无未说明的 `# noqa` 或临时禁用规则。
-- [ ] OpenAPI、数据库迁移、部署文档、镜像版本（`only-stock:0.1.0`）一致；无硬编码密码/Key；日志无敏感信息。
-- [ ] 如实施中修改了规范，对应 `docs/` 文档与 [00-文档索引与阅读指南.md](docs/00-文档索引与阅读指南.md) 已同步更新。
+- [x] P0–P9 全部任务完成，阻塞项清零。
+- [x] [16-验收标准.md](docs/16-验收标准.md) 的 `ACC-ROLE`、`ACC-DATA`、`ACC-FLOW`、`ACC-STORAGE`、`ACC-API`、`ACC-OPS`、`ACC-PERF`、`ACC-XLSX`、`ACC-MCP` 核心条目全部通过。
+- [x] 并发负库存、软删除负库存、余额上限、重复提交、故障回滚测试通过。
+- [x] 六类 `code` 自动生成、并发唯一、不可修改、停用/删除不复用测试通过。
+- [x] 分类删除/停用边界、六类名称唯一与规范化查重、启用上级校验测试通过。
+- [x] XLSX 模板、部分填入、无副作用解析、原始数值精度、导出与安全测试通过。
+- [x] MCP 12/7 工具清单、越权拒绝、`code`/`doc_no` 定位、无内部 ID、原子提交、300 秒去重、限流与 Origin/Host 测试通过。
+- [x] 备份恢复演练成功，恢复后库存/单据一致；最近 7 个成功集清理、离线恢复与回滚命令可执行。
+- [x] 10 万明细性能达到基线，或形成经确认的调整结论。
+- [x] `uv run pytest` 全量通过；`uv sync --locked` 可复现环境。
+- [x] `uv run ruff check .` 与 `uv run ruff format --check .` 全量通过；无未说明的 `# noqa` 或临时禁用规则。
+- [x] OpenAPI、数据库迁移、部署文档、镜像版本（`only-stock:0.1.0`）一致；无硬编码密码/Key；日志无敏感信息。
+- [x] 如实施中修改了规范，对应 `docs/` 文档与 [00-文档索引与阅读指南.md](docs/00-文档索引与阅读指南.md) 已同步更新。
 
 ## 风险与处理
 
@@ -797,3 +797,13 @@ curl --fail --silent http://127.0.0.1:8000/health/ready
 | 2026-11-04 | P8 门禁 | `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/e2e`；`uv run pytest tests/security`；另执行 `uv run pytest -q` | 通过：Ruff 0 告警、210 个文件格式一致；e2e 16 passed；security 44 passed；全量 536 passed | 依据 `TASKS.md` P8 阶段门禁；页面与 API 共用服务层和权限组件，页面路由不进入 OpenAPI；新增备份 API 后 OpenAPI 契约测试 23 passed；未放宽既有安全与库存约束 |
 | 2026-11-05 | T6.1/T6.2/T6.5/T6.6（模板与导出格式对齐） | `uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest tests/unit/test_xlsx_templates.py tests/unit/test_xlsx_parser.py tests/unit/test_xlsx_performance.py tests/integration/test_xlsx_api.py tests/security/test_xlsx_security.py tests/e2e/test_pages_documents.py -q`（77 passed）；`uv run pytest -q`（543 passed） | 通过：`录入数据`标题改为不带单号的“入库单/出库单”，第 2 行 A2/B2 仓库、E2/F2 管理部门，列顺序改为一级分类、二级分类、物资、数量、厂家、项目、备注（出库无厂家）；列宽、行高、合并单元格、宋体字号、居中与细边框按上传模板对齐，未额外添加填充色；模板不含责任栏；隐藏“下拉选项”表提供仓库、部门、一级/二级分类、物资、厂家、项目名称数据有效性；导出标题追加正式单号，明细下方空一行保留 4 个空姓名责任栏；解析导出文件时忽略责任栏及其后内容 | 依据 `docs/07` 7.8.1、7.8.5，`docs/11` 8.5，`docs/12` 第 9 章，`docs/16` ACC-XLSX-001/010；新增 `app/modules/xlsx/options.py`，模板布局常量集中在 `constants.py`，解析与生成共用列定义；测试夹具按语义字段写入实际列 |
 | 2026-11-05 | 登录页失效 Cookie 重定向循环修复 | `uv run pytest tests/e2e/test_pages_auth.py tests/integration/test_auth_api.py tests/security/test_auth_security.py -q`（39 passed）；`uv run pytest -q`（546 passed） | 通过：浏览器持有失效、已撤销或数据库中不存在的会话 Cookie 时，`GET /` 返回 303 到登录页并带 `Set-Cookie` 删除头；`GET /login` 校验会话后再决定是否跳转，失效时清除 Cookie 并显示登录页，不再出现“登录页 ↔ 工作台”循环；有效会话访问 `/login` 仍跳转工作台，强制改密流程不变；新增页面与 API 两条回归用例 | 依据 `docs/04` 5.4 新增的失效 Cookie 规则；根因是登录页只判断 Cookie 是否存在，且异常处理替换了携带删除头的 Response；修复 `app/pages/auth_pages.py` 与 `app/error_handlers.py`，不影响有效会话、登录限流、CSRF 与 API Key/MCP 认证 |
+| 2026-11-05 | T9.1 | `docker build -t only-stock:0.1.0 .`；`uv run python scripts/release_check.py`；`uv export --no-dev --format requirements-txt > /tmp/requirements-prod.txt`；`uv run pip-audit -r /tmp/requirements-prod.txt --disable-pip --no-deps`；`docker run --rm --entrypoint /bin/sh only-stock:0.1.0 -c 'id; ls /app'` | 通过：镜像构建成功（约 327 MB），运行用户 `uid=10001(app)`；`python:3.13-slim-bookworm` 与 `uv:0.13.7` 均固定 digest；`uv sync --locked --no-dev`；镜像不含 `.env`、数据库、备份或测试；`python -m app.cli --help/backup list` 可执行；`pip-audit` 对生产依赖输出 `No known vulnerabilities found`；release_check 全部 PASS | 依据 docs/13 10.3、AGENTS 第 8 节；容器层 CVE 扫描器在验收环境不可用，已记录于 docs/19 16.6 |
+| 2026-11-05 | T9.2 | `docker compose config`；`docker compose --env-file .env up -d --build`；`docker compose ps`；`curl --fail --silent http://127.0.0.1:8000/health/ready`；容器内 `id` | 通过：仅一个 `app` 服务、端口 8000、`inventory_data`/`inventory_backups` 两个卷、单 worker；容器 `healthy`；页面、API、`/mcp` 均可访问；非 root；无反向代理/HTTPS/多副本 | 依据 docs/13 10.1、10.2 |
+| 2026-11-05 | T9.3 | 空卷首次启动；`POST /auth/login`；`POST /auth/change-password`；`POST /api/v1/api-keys`；删除 `.env` 初始化变量后 `docker compose up -d --force-recreate app`；`docker inspect` 检查环境 | 通过：首次创建 `initial-admin` 且 `force_password_change=true`；改密成功；重建容器后用户数仍为 1；容器环境无 `BOOTSTRAP_ADMIN_PASSWORD`；MCP 地址与 `MCP_ALLOWED_HOSTS` 生效 | 初始化成功后必须同时删除用户名与密码两行（或都留空），已同步 docs/13 10.4 与 `.env.example` |
+| 2026-11-05 | T9.4 | `uv run pytest tests/unit/test_backup_scheduler.py tests/integration/test_backup_retention.py tests/integration/test_backups_api.py -q`；容器内 `POST /api/v1/backups` 与 `python -m app.cli backup list` | 通过：APScheduler 每日 02:00 任务；SQLite Online Backup API；`manifest.json`、`integrity-report.json`、SHA-256；失败集不计入可恢复集；手动与定时备份共同保留最近 7 个成功集；清理失败不影响新备份；页面/API 可查状态 | 依据 docs/13 10.6 |
+| 2026-11-05 | T9.5 | `uv run pytest tests/integration/test_restore.py tests/integration/test_restore_drill.py -q`；容器内 `stop app` → `backup list` → `restore --backup-set 20261105T142812Z-8c275cf6 --yes` → `up -d app`；`restore --rollback-from /data/recovery-pre/20261105T142821Z --yes`；app 运行中执行 restore | 通过：恢复前校验 manifest、SHA-256 与 `PRAGMA integrity_check`；原库与 `-wal`/`-shm` 移到 `recovery-pre/20261105T142821Z`；恢复后 health、登录、库存、单据与恢复的 API Key MCP 调用一致；运行中 restore 退出码 1 且提示 `lock`；回滚成功并生成 `recovery-pre/20261105T143048Z` | 依据 docs/13 10.7；隔离演练证据见 docs/19 16.4.3 |
+| 2026-11-05 | T9.6 | `uv run pytest tests/integration/test_migration_runner.py tests/integration/test_migration_gate.py -q`；容器入口执行 `python -m app.cli migrate`；`curl /health/ready` | 通过：唯一迁移执行器；`app.lock` 排他锁；`migration-log.jsonl` 记录前后版本、起止时间、结果与错误；迁移失败 readiness 503 且业务请求返回 503 `SYSTEM_NOT_READY`；首次启动迁移 `base -> 0004_line_remarks` 用时 0.281 秒 | 依据 docs/13 10.5、docs/09 8.7 |
+| 2026-11-05 | T9.7 | `uv run pytest tests/performance tests/unit/test_xlsx_performance.py -q`；`uv run python scripts/perf_load.py --minutes 5 --concurrency 10`；`taskset -c 0,1 uv run python scripts/perf_load.py --minutes 5 --concurrency 10` | 通过：10 万有效明细；库存/单据/流水查询计划命中索引，无无索引全表扫描；16 vCPU P95 868 ms、2 vCPU 近似 P95 1178 ms、错误率 0%；2,000 行 XLSX 解析/导出低于 10 秒；20 并发会话无连接/内存泄漏 | 依据 docs/14 11.3、docs/16 13.7；报告见 docs/19 16.5 |
+| 2026-11-05 | T9.8 | 逐项核对 docs/16 第 13 章 ACC-ROLE/DATA/FLOW/STORAGE/API/OPS/PERF/XLSX/MCP；对照 docs/17 追踪矩阵；新增并填写 docs/19 | 通过：102 个验收条目均有执行证据；需求 → 设计章节 → 验收追踪无缺口；无未验收失败项 | 新增 docs/19 并同步 docs/00 文档索引 |
+| 2026-11-05 | T9.9 | `uv run python scripts/release_check.py`；`uv run pytest -q`；`uv run ruff check .`；`uv run ruff format --check .`；`uv lock --check` | 通过：release_check 全部 PASS；镜像 `only-stock:0.1.0` 非 root、单 worker、入口迁移、CLI 可用；OpenAPI 47 路径/59 操作；迁移 head `0004_line_remarks`；应用/pyproject/Compose 版本一致；仓库无 `.env`、数据库、备份或私钥 | 发布检查清单与性能证据见 docs/19 16.4、16.5 |
+| 2026-11-05 | P9 门禁 | `uv run ruff check .`；`uv run ruff format --check .`；`uv run pytest`；`docker compose config`；`docker compose --env-file .env up -d --build`；`docker compose ps`；`curl --fail --silent http://127.0.0.1:8000/health/ready` | 通过：Ruff 0 告警、228 个文件格式一致；全量 586 passed；compose config/up/ps 通过；ready 200；验证后已停止并清理测试容器、卷与 `.env` | 依据 TASKS.md P9 阶段门禁；最终镜像 `only-stock:0.1.0` |

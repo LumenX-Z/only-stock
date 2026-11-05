@@ -26,6 +26,7 @@ from app.health import router as health_router
 from app.logging import configure_logging
 from app.mcp.server import MCP_PATH, build_mcp
 from app.middleware import RequestContextMiddleware
+from app.migration_gate import MigrationGateMiddleware
 from app.modules.audit.router import router as audit_router
 from app.modules.backups.router import router as backups_router
 from app.modules.documents.router import router as documents_router
@@ -74,6 +75,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.runtime = runtime
     app.state.mcp = mcp
     app.state.pages_enabled = True
+    # 后添加的中间件在最外层；请求 ID 必须覆盖迁移闸门返回的 503。
+    app.add_middleware(MigrationGateMiddleware, runtime=runtime)
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
     install_openapi_contract(app)
@@ -97,9 +100,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def _startup(runtime: Runtime) -> None:
     runtime.settings.prepare_directories()
+    runtime.app_lock.acquire()
     verify_sqlite_pragmas(runtime.engine, runtime.settings.sqlite_busy_timeout_ms)
 
-    if runtime.migration_checker.is_current(runtime.engine):
+    runtime.migrations_current = runtime.migration_checker.is_current(runtime.engine)
+    if runtime.migrations_current:
         created_admin = bootstrap_initial_admin(runtime.session_factory, runtime.settings)
         if created_admin is not None:
             logger.info("initial company admin created")
@@ -107,10 +112,13 @@ def _startup(runtime: Runtime) -> None:
     else:
         logger.warning("database migrations not current; initial admin bootstrap skipped")
 
-    try:
-        runtime.scheduler.start()
-    except Exception:
-        logger.exception("backup scheduler start failed")
+    if runtime.migrations_current:
+        try:
+            runtime.scheduler.start()
+        except Exception:
+            logger.exception("backup scheduler start failed")
+    else:
+        logger.warning("backup scheduler not started while migrations are not current")
 
     result = runtime.readiness.check()
     if result.ready:
@@ -138,7 +146,10 @@ def _shutdown(runtime: Runtime) -> None:
     except Exception:
         logger.exception("backup scheduler shutdown failed")
     finally:
-        runtime.engine.dispose()
+        try:
+            runtime.engine.dispose()
+        finally:
+            runtime.app_lock.release()
 
 
 app = create_app()

@@ -7,7 +7,6 @@
 - 失败保留错误记录且不计入可恢复集；只保留最近 N 个成功集。
 """
 
-import hashlib
 import json
 import logging
 import os
@@ -24,17 +23,21 @@ from app.config import Settings
 from app.db.types import utc_now
 from app.errors import AppError
 from app.modules.audit.service import record_audit
+from app.modules.backups.storage import (
+    DATABASE_FILE,
+    FAILURES_DIR,
+    INTEGRITY_REPORT_FILE,
+    MANIFEST_FILE,
+    integrity_check,
+    sha256_file,
+    write_json,
+)
 from app.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
 _BACKUP_LOCK = threading.Lock()
-_MANIFEST = "manifest.json"
-_INTEGRITY_REPORT = "integrity-report.json"
-_DATABASE_FILE = "inventory.sqlite3"
-_FAILURES_DIR = "failures"
 _MAX_FAILURE_RECORDS = 20
-_CHUNK = 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,18 +102,18 @@ def _create_backup(
             resource="backup",
         )
     try:
-        backup_path = temp_dir / _DATABASE_FILE
+        backup_path = temp_dir / DATABASE_FILE
         _copy_database(database_path, backup_path)
-        integrity = _integrity_check(backup_path)
+        integrity = integrity_check(backup_path)
         if integrity != "ok":
             raise RuntimeError(f"integrity_check 返回 {integrity}")
         size_bytes = backup_path.stat().st_size
-        sha256 = _sha256(backup_path)
+        sha256 = sha256_file(backup_path)
         manifest = {
             "backup_set_id": backup_id,
             "created_at": created_at.isoformat(),
             "app_version": APP_VERSION,
-            "database_file": _DATABASE_FILE,
+            "database_file": DATABASE_FILE,
             "size_bytes": size_bytes,
             "sha256": sha256,
             "integrity_check": integrity,
@@ -120,8 +123,8 @@ def _create_backup(
             "checked_at": created_at.isoformat(),
             "integrity_check": integrity,
         }
-        _write_json(temp_dir / _MANIFEST, manifest)
-        _write_json(temp_dir / _INTEGRITY_REPORT, report)
+        write_json(temp_dir / MANIFEST_FILE, manifest)
+        write_json(temp_dir / INTEGRITY_REPORT_FILE, report)
         os.replace(temp_dir, final_dir)
     except AppError:
         _cleanup(temp_dir)
@@ -179,11 +182,11 @@ def list_backups(
         for child in settings.backup_dir.iterdir():
             if not child.is_dir() or child.name.startswith("."):
                 continue
-            manifest_path = child / _MANIFEST
+            manifest_path = child / MANIFEST_FILE
             if not manifest_path.is_file():
                 continue
             items.append(_read_manifest(child.name, manifest_path))
-        failures_dir = settings.backup_dir / _FAILURES_DIR
+        failures_dir = settings.backup_dir / FAILURES_DIR
         if failures_dir.is_dir():
             for failure in failures_dir.glob("*.json"):
                 items.append(_read_failure(failure))
@@ -269,37 +272,12 @@ def _copy_database(source_path: Path, target_path: Path) -> None:
         source.close()
 
 
-def _integrity_check(path: Path) -> str:
-    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    try:
-        result = connection.execute("PRAGMA integrity_check").fetchone()
-        return str(result[0]) if result else "unknown"
-    finally:
-        connection.close()
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while chunk := handle.read(_CHUNK):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    with path.open("x", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-        handle.flush()
-        os.fsync(handle.fileno())
-    path.chmod(0o600)
-
-
 def _record_failure(settings: Settings, backup_id: str, created_at: datetime, error: str) -> None:
     try:
-        failures = settings.backup_dir / _FAILURES_DIR
+        failures = settings.backup_dir / FAILURES_DIR
         failures.mkdir(mode=0o700, exist_ok=True)
         path = failures / f"{backup_id}.json"
-        _write_json(
+        write_json(
             path,
             {
                 "backup_set_id": backup_id,
@@ -322,7 +300,7 @@ def _apply_retention(settings: Settings) -> None:
                 for child in settings.backup_dir.iterdir()
                 if child.is_dir()
                 and not child.name.startswith(".")
-                and (child / _MANIFEST).is_file()
+                and (child / MANIFEST_FILE).is_file()
             ],
             key=lambda item: item.name,
             reverse=True,

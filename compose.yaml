@@ -1,0 +1,44 @@
+# 依据 docs/13-Docker部署与运维.md 10.1、10.2：
+# 只运行一个 app 服务，单 worker，MCP 与页面/API 同端口；无反向代理、无 HTTPS。
+services:
+  app:
+    build:
+      context: .
+    image: only-stock:0.1.0
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      DATA_DIR: /data
+      BACKUP_DIR: /backups
+      BACKUP_TIME: "02:00"
+      BACKUP_RETENTION_SETS: "7"
+      SESSION_IDLE_MINUTES: "480"
+      SESSION_ABSOLUTE_HOURS: "24"
+      MCP_KEY_RATE_PER_MINUTE: "60"
+      MCP_IP_RATE_PER_MINUTE: "120"
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-127.0.0.1,localhost}
+      TZ: Asia/Shanghai
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    volumes:
+      - inventory_data:/data
+      - inventory_backups:/backups
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  inventory_data:
+  inventory_backups:

@@ -10,6 +10,7 @@ from app.config import PROJECT_ROOT, Settings
 from app.db.database import create_engine_from_settings, create_session_factory
 from app.db.migrations import MigrationChecker
 from app.readiness import ReadinessProbe
+from app.services.app_lock import AppLock
 from app.services.backup_scheduler import BackupScheduler
 
 
@@ -22,13 +23,19 @@ class Runtime:
     readiness: ReadinessProbe
     migration_checker: MigrationChecker
     login_rate_limiter: LoginRateLimiter
+    app_lock: AppLock
+    migrations_current: bool = True
 
 
 def build_runtime(settings: Settings) -> Runtime:
     engine = create_engine_from_settings(settings)
     session_factory = create_session_factory(engine)
     migration_checker = MigrationChecker(PROJECT_ROOT / "alembic.ini")
-    scheduler = BackupScheduler(settings.timezone_name)
+    scheduler = BackupScheduler(
+        settings.timezone_name,
+        settings=settings,
+        session_factory=session_factory,
+    )
     readiness = ReadinessProbe(settings, engine, scheduler, migration_checker)
     return Runtime(
         settings=settings,
@@ -38,4 +45,5 @@ def build_runtime(settings: Settings) -> Runtime:
         readiness=readiness,
         migration_checker=migration_checker,
         login_rate_limiter=LoginRateLimiter(),
+        app_lock=AppLock(settings.data_dir),
     )

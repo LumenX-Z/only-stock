@@ -91,9 +91,10 @@ def test_last_admin_cannot_be_disabled_from_page(
 
 def test_reset_password_forces_change_on_next_page_login(
     logged_in_admin: tuple[TestClient, dict[str, Any]],
-    client: TestClient,
 ) -> None:
     admin_client, _ = logged_in_admin
+    # 同一数据目录只允许一个应用实例持锁；第二个浏览器会话复用同一应用。
+    client = TestClient(admin_client.app)
     created = post_page(
         admin_client,
         "/users",
@@ -121,8 +122,11 @@ def test_reset_password_forces_change_on_next_page_login(
         == 303
     )
 
-    login = login_page(client, "page-reset", "reset-password-456")
-    assert login.status_code == 303
-    redirected = client.get("/", follow_redirects=False)
-    assert redirected.status_code == 303
-    assert redirected.headers["location"] == "/change-password"
+    try:
+        login = login_page(client, "page-reset", "reset-password-456")
+        assert login.status_code == 303
+        redirected = client.get("/", follow_redirects=False)
+        assert redirected.status_code == 303
+        assert redirected.headers["location"] == "/change-password"
+    finally:
+        client.close()

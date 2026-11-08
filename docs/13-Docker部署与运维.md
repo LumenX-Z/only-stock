@@ -27,7 +27,8 @@ services:
   app:
     build:
       context: .
-    image: only-stock:0.1.0
+    # 已发布镜像；本地源码构建用 `docker compose up -d --build`。
+    image: lumenxz/only-stock:0.1.0-beta.1
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -67,6 +68,8 @@ volumes:
   inventory_backups:
 ```
 
+`0.1.0-beta.1` 是应用版本 `0.1.0` 的预发布镜像 tag；应用内版本号仍为 `0.1.0`。
+
 容器启动命令固定为：
 
 ```bash
@@ -96,11 +99,14 @@ BOOTSTRAP_ADMIN_USERNAME=initial-admin
 BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-long-random-password
 ```
 
-2. 启动：
+2. 拉取已发布镜像并启动：
 
 ```bash
-docker compose --env-file .env up -d --build
+docker compose --env-file .env pull
+docker compose --env-file .env up -d
 ```
+
+源码构建可改用 `docker compose --env-file .env up -d --build`。
 
 3. 检查：
 
@@ -150,7 +156,7 @@ docker compose logs app
 
 ### 10.7 恢复要求
 
-恢复必须针对完整数据库备份，且只能由运维人员通过离线 CLI 执行。恢复 CLI 必须实现以下命令契约，容器运行用户、数据卷和镜像版本（`only-stock:0.1.0`）与 `app` 服务一致：
+恢复必须针对完整数据库备份，且只能由运维人员通过离线 CLI 执行。恢复 CLI 必须实现以下命令契约，容器运行用户、数据卷和镜像版本（`lumenxz/only-stock:0.1.0-beta.1`）与 `app` 服务一致：
 
 ```bash
 # 1. 停止业务写入。恢复期间不得启动 app。

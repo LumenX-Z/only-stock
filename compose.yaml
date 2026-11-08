@@ -4,7 +4,7 @@ services:
   app:
     build:
       context: .
-    image: only-stock:0.1.0
+    image: lumenxz/only-stock:0.1.0-beta.1
     restart: unless-stopped
     ports:
       - "8000:8000"

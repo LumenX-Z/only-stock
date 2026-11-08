@@ -2,7 +2,7 @@
 
 面向小型公司/组织（单公司部署）的轻量仓库与库存管理系统：管理仓库、部门、项目、厂家、分类与物资等基础资料，登记入库单和出库单，按仓库与物资实时汇总库存并禁止负库存。
 
-系统采用 Python 全栈、单一 SQLite 数据库和服务端渲染（Jinja2 + HTMX），通过 Docker Compose 以单个 `app` 服务部署；页面、JSON API 与 MCP 服务共用同一进程、同一端口和同一数据库。当前版本 `0.1.0`。
+系统采用 Python 全栈、单一 SQLite 数据库和服务端渲染（Jinja2 + HTMX），通过 Docker Compose 以单个 `app` 服务部署；页面、JSON API 与 MCP 服务共用同一进程、同一端口和同一数据库。当前发布镜像为 `lumenxz/only-stock:0.1.0-beta.1`（应用版本 `0.1.0`，预发布，`linux/amd64`）。
 
 ## AI 开发声明
 
@@ -10,7 +10,7 @@
 
 ## 主要用途
 
-- 适用于规模较小的单一公司或组织：约十几人使用、全系统 20 个在线用户。
+- 适用于规模较小的单一公司或组织。
 - 用于内部仓库/库存管理：基础资料维护、入库与出库登记、库存与流水查询、XLSX 快速录入、审计追踪、备份与恢复。
 - 通过 MCP（Model Context Protocol）向 AI 客户端或自动化工具提供受权限控制的业务工具。
 - 明确不支持：多公司/多租户、审批流、批次/序列号/保质期、库位与调拨、财务结算、HTTPS/反向代理/公网暴露、多副本高可用。完整范围见 [docs/01-项目概览与范围.md](docs/01-项目概览与范围.md)。
@@ -41,23 +41,94 @@
 
 前置条件：Docker 与 Docker Compose。
 
+**使用 Docker Compose**
+
+在部署目录创建以下两个文件。
+
+**`compose.yaml`**
+
+```yaml
+services:
+  app:
+    image: lumenxz/only-stock:0.1.0-beta.1
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      DATA_DIR: /data
+      BACKUP_DIR: /backups
+      BACKUP_TIME: "02:00"
+      BACKUP_RETENTION_SETS: "7"
+      SESSION_IDLE_MINUTES: "480"
+      SESSION_ABSOLUTE_HOURS: "24"
+      MCP_KEY_RATE_PER_MINUTE: "60"
+      MCP_IP_RATE_PER_MINUTE: "120"
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-127.0.0.1,localhost}
+      TZ: ${TZ:-Asia/Shanghai}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    volumes:
+      - inventory_data:/data
+      - inventory_backups:/backups
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  inventory_data:
+  inventory_backups:
+```
+
+**`.env`**
+
+```dotenv
+# 首次启动初始化公司管理员；请替换为至少 12 位的高强度随机密码。
+# 创建成功后删除这两行，再执行 docker compose --env-file .env up -d。
+BOOTSTRAP_ADMIN_USERNAME=initial-admin
+BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-long-random-password
+
+# MCP 允许的 Host：替换或追加实际服务器的内网 IP/域名，不要使用通配符 *。
+MCP_ALLOWED_HOSTS=127.0.0.1,localhost,192.168.1.10
+
+# 时区
+TZ=Asia/Shanghai
+```
+
+启动并检查：
+
 ```bash
-# 1. 准备环境变量；.env 不得提交到仓库
-cp .env.example .env
-# 编辑 .env：设置 BOOTSTRAP_ADMIN_USERNAME、BOOTSTRAP_ADMIN_PASSWORD、
-# MCP_ALLOWED_HOSTS（填入实际内网地址，不要允许任意 Host）、TZ 等
-
-# 2. 构建并启动
-docker compose --env-file .env up -d --build
-
-# 3. 检查服务状态与就绪状态
+docker compose --env-file .env pull
+docker compose --env-file .env up -d
 docker compose ps
 curl --fail --silent http://127.0.0.1:8000/health/ready
 ```
 
+**从源码构建**
+
+在仓库根目录执行：
+
+```bash
+cp .env.example .env
+# 编辑 .env：设置 BOOTSTRAP_ADMIN_USERNAME、BOOTSTRAP_ADMIN_PASSWORD、
+# MCP_ALLOWED_HOSTS（填入实际内网地址，不要允许任意 Host）、TZ 等
+docker compose --env-file .env up -d --build
+```
+
 - 页面地址：`http://<服务器IP>:8000`；MCP 地址：`http://<服务器IP>:8000/mcp`。
 - 仅当数据库没有任何用户时，首次启动会用 `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` 创建首位公司管理员；首次登录必须修改密码。
-- 初始化成功后，从 `.env` 同时删除（或留空）`BOOTSTRAP_ADMIN_USERNAME` 和 `BOOTSTRAP_ADMIN_PASSWORD`，再执行 `docker compose up -d`；只设置其中一个会导致启动配置校验失败。
+- 初始化成功后，从 `.env` 同时删除（或留空）`BOOTSTRAP_ADMIN_USERNAME` 和 `BOOTSTRAP_ADMIN_PASSWORD`，再执行 `docker compose --env-file .env up -d`；只设置其中一个会导致启动配置校验失败。
+- 升级已发布镜像前先完成备份，再执行 `docker compose --env-file .env pull` 与 `docker compose --env-file .env up -d`；升级与迁移规则见 [docs/13-Docker部署与运维.md](docs/13-Docker部署与运维.md) 10.5。
 - 详细部署、首次启动、备份恢复与升级步骤见 [docs/13-Docker部署与运维.md](docs/13-Docker部署与运维.md)。
 
 ### 本地开发
@@ -160,7 +231,7 @@ uv run pytest
 uv run python scripts/release_check.py
 ```
 
-`release_check.py` 在检查镜像相关条目时需要已构建 `only-stock:0.1.0` 镜像；仅做静态检查时可加 `--skip-image`。验收条目与最近一次发布证据见 [docs/16-验收标准.md](docs/16-验收标准.md) 与 [docs/19-验收与发布记录.md](docs/19-验收与发布记录.md)。
+`release_check.py` 在检查镜像相关条目时需要本地存在 `lumenxz/only-stock:0.1.0-beta.1` 镜像（可通过 `docker compose --env-file .env pull` 或 `docker build -t lumenxz/only-stock:0.1.0-beta.1 .` 获取）；仅做静态检查时可加 `--skip-image`。验收条目与最近一次发布证据见 [docs/16-验收标准.md](docs/16-验收标准.md) 与 [docs/19-验收与发布记录.md](docs/19-验收与发布记录.md)。
 
 ## 文档
 

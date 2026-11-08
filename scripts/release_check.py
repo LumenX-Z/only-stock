@@ -2,7 +2,7 @@
 
 依据 docs/18-实施顺序与完成定义.md 15.2：
 
-- 应用版本、`pyproject.toml`、Compose 镜像标签一致；
+- 应用版本与 `pyproject.toml` 一致，Compose 与部署文档使用统一的发布镜像标签；
 - 迁移链只有一个 head；
 - OpenAPI 可生成且包含健康检查与业务路径；
 - Dockerfile/Compose/入口脚本满足固定 Python、uv 锁文件、非 root、单 worker；
@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PUBLISHED_IMAGE = "lumenxz/only-stock:0.1.0-beta.1"
 
 
 @dataclass
@@ -72,12 +73,10 @@ def _version_check() -> Check:
 
 
 def _image_tag_check() -> Check:
-    from app.version import APP_VERSION
-
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
-    expected = f"image: only-stock:{APP_VERSION}"
+    expected = f"image: {PUBLISHED_IMAGE}"
     docs = (ROOT / "docs/13-Docker部署与运维.md").read_text(encoding="utf-8")
-    passed = expected in compose and f"only-stock:{APP_VERSION}" in docs
+    passed = expected in compose and PUBLISHED_IMAGE in docs
     return Check("image_tag", passed, expected)
 
 
@@ -190,11 +189,9 @@ def _repository_secrets_check() -> Check:
 
 
 def _image_checks() -> list[Check]:
-    from app.version import APP_VERSION
-
-    image = f"only-stock:{APP_VERSION}"
+    image = PUBLISHED_IMAGE
     if not _image_exists(image):
-        return [Check("image", False, f"{image} 未构建，先执行 docker build")]
+        return [Check("image", False, f"{image} 未构建，先执行 docker build -t {image} .")]
     config = json.loads(_docker(["image", "inspect", image]))[0]["Config"]
     user = str(config.get("User") or "")
     command = " ".join(config.get("Cmd") or [])

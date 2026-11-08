@@ -1,6 +1,6 @@
 """发布检查脚本。
 
-依据 docs/18-实施顺序与完成定义.md 15.2 与 TASKS.md T9.9：
+依据 docs/18-实施顺序与完成定义.md 15.2：
 
 - 应用版本、`pyproject.toml`、Compose 镜像标签一致；
 - 迁移链只有一个 head；

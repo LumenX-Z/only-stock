@@ -1,7 +1,9 @@
 [project]
 name = "only-stock"
 version = "0.1.0"
-description = "单一公司内网库存管理系统（FastAPI + SQLite + Jinja2/HTMX + MCP）"
+description = "面向小型公司/组织的仓库与库存管理系统（FastAPI + SQLite + Jinja2/HTMX + MCP）"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi>=0.115.0",

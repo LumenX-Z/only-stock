@@ -398,7 +398,7 @@ def test_xlsx_export_escapes_formula_text(
         actor_user_id=master_data.actor.id,
         request_id=None,
         category_id=category.id,
-        unit="个",
+        unit="=单位公式",
         quantity_type="DECIMAL",
     )
     manufacturer = create_entity(
@@ -435,14 +435,16 @@ def test_xlsx_export_escapes_formula_text(
     sheet = workbook["录入数据"]
     assert workbook.sheetnames == ["录入数据", "填写说明", "单据信息"]
     assert sheet["B2"].value == master_data.warehouse.name
-    assert sheet["F2"].value == master_data.department.name
+    assert sheet["G2"].value == "管理部门名称"
+    assert sheet["H2"].value == master_data.department.name
     for coordinate, expected in (
         ("A4", "+分类公式"),
         ("C4", "@物资公式"),
         ("D4", "1.250"),
-        ("E4", "-厂家公式"),
-        ("F4", "=项目公式"),
-        ("G4", "=1+1"),
+        ("E4", "=单位公式"),
+        ("F4", "-厂家公式"),
+        ("G4", "=项目公式"),
+        ("H4", "=1+1"),
     ):
         cell = sheet[coordinate]
         assert cell.value == expected

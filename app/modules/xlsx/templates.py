@@ -6,6 +6,7 @@
 - 入库含厂家列，出库无厂家列，备注逐行且为最后一列；
 - 模板填写区除数量、备注外提供下拉选项；模板不含责任栏；
 - 导出单据标题附带正式单号，明细下方保留 4 个责任人栏且姓名留空；
+- 导出在数量列后增加单位列，列宽按横向 A4 打印单独适配；模板不含单位列；
 - 导出的数量写入文本单元格并保留三位小数；
 - 所有用户可控文本强制按字符串单元格写入，避免 ``=``、``+``、``-``、``@`` 被当作公式。
 """
@@ -19,6 +20,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.properties import PageSetupProperties
 from openpyxl.worksheet.worksheet import Worksheet
 
 from app.modules.documents.models import DocType
@@ -27,6 +29,9 @@ from app.modules.xlsx.constants import (
     COLUMN_TITLES,
     DOCUMENT_TITLE_LABELS,
     DOCUMENT_TITLE_ROW,
+    EXPORT_COLUMN_TITLES,
+    EXPORT_HEADER_DEPARTMENT_COLUMNS,
+    EXPORT_RESPONSIBLE_LABELS,
     FIRST_DATA_ROW,
     HEADER_DEPARTMENT_LABEL,
     HEADER_DEPARTMENT_LABEL_COLUMN,
@@ -45,7 +50,6 @@ from app.modules.xlsx.constants import (
     PROJECT_COLUMN,
     QUANTITY_COLUMN,
     REMARK_COLUMN,
-    RESPONSIBLE_LABELS,
     SHEET_DATA,
     SHEET_HELP,
     SHEET_INFO,
@@ -54,6 +58,7 @@ from app.modules.xlsx.constants import (
     TEMPLATE_IDENTIFIER_LABEL,
     TEMPLATE_VERSION_LABEL,
     TEMPLATE_VERSIONS,
+    UNIT_COLUMN,
 )
 
 _TITLE_FONT = Font(name="宋体", size=18, bold=True)
@@ -89,6 +94,29 @@ _COLUMN_WIDTHS: dict[str, dict[str, float]] = {
     },
 }
 
+# 导出单独适配横向 A4 打印；合计宽度控制在 A4 横向可打印范围内。
+_EXPORT_COLUMN_WIDTHS: dict[str, dict[str, float]] = {
+    DocType.INBOUND.value: {
+        LEVEL1_COLUMN: 15.0,
+        LEVEL2_COLUMN: 13.0,
+        MATERIAL_COLUMN: 13.0,
+        QUANTITY_COLUMN: 13.0,
+        UNIT_COLUMN: 8.0,
+        MANUFACTURER_COLUMN: 15.0,
+        PROJECT_COLUMN: 19.0,
+        REMARK_COLUMN: 19.0,
+    },
+    DocType.OUTBOUND.value: {
+        LEVEL1_COLUMN: 15.0,
+        LEVEL2_COLUMN: 13.0,
+        MATERIAL_COLUMN: 13.0,
+        QUANTITY_COLUMN: 13.0,
+        UNIT_COLUMN: 8.0,
+        PROJECT_COLUMN: 23.0,
+        REMARK_COLUMN: 26.0,
+    },
+}
+
 _SAFE_FILENAME = re.compile(r"[^A-Za-z0-9_.-]+")
 _SAFE_DOC_NO = re.compile(r"^[A-Za-z0-9-]+$")
 
@@ -111,6 +139,7 @@ class ExportRow:
     level2_name: str | None
     material_name: str
     quantity: str
+    unit: str
     manufacturer_name: str | None
     remark: str | None
 
@@ -160,16 +189,23 @@ def build_document_export(
     info_rows: list[tuple[str, str]],
     oversized: bool = False,
 ) -> bytes:
-    """生成单张单据导出文件；标题含单号，明细下方保留空姓名责任栏。"""
-    columns = COLUMN_TITLES[doc_type]
+    """生成单张单据导出文件；标题含单号，数量后带单位，明细下方保留空姓名责任栏。"""
+    columns = EXPORT_COLUMN_TITLES[doc_type]
     workbook = Workbook()
     data_sheet = workbook.active
     data_sheet.title = SHEET_DATA
     title = f"{DOCUMENT_TITLE_LABELS[doc_type]}（{doc_no}）"
     _write_document_title(data_sheet, columns, title)
-    _write_header_area(data_sheet, warehouse_name, department_name)
+    department_label_column, department_value_column = EXPORT_HEADER_DEPARTMENT_COLUMNS[doc_type]
+    _write_header_area(
+        data_sheet,
+        warehouse_name,
+        department_name,
+        department_label_column=department_label_column,
+        department_value_column=department_value_column,
+    )
     _write_column_titles(data_sheet, columns)
-    _set_data_widths(data_sheet, doc_type, columns)
+    _set_export_layout(data_sheet, doc_type, columns)
 
     for index, row in enumerate(rows):
         row_no = FIRST_DATA_ROW + index
@@ -179,6 +215,7 @@ def build_document_export(
             LEVEL2_COLUMN: row.level2_name,
             MATERIAL_COLUMN: row.material_name,
             QUANTITY_COLUMN: row.quantity,
+            UNIT_COLUMN: row.unit,
             MANUFACTURER_COLUMN: row.manufacturer_name,
             REMARK_COLUMN: row.remark,
         }
@@ -245,6 +282,9 @@ def _write_header_area(
     sheet: Worksheet,
     warehouse_name: str | None,
     department_name: str | None,
+    *,
+    department_label_column: int = HEADER_DEPARTMENT_LABEL_COLUMN,
+    department_value_column: int = HEADER_DEPARTMENT_VALUE_COLUMN,
 ) -> None:
     warehouse_label = _write_text(
         sheet, HEADER_ROW, HEADER_WAREHOUSE_LABEL_COLUMN, HEADER_WAREHOUSE_LABEL
@@ -253,10 +293,10 @@ def _write_header_area(
     _write_text(sheet, HEADER_ROW, HEADER_WAREHOUSE_VALUE_COLUMN, warehouse_name).font = _NORMAL
 
     department_label = _write_text(
-        sheet, HEADER_ROW, HEADER_DEPARTMENT_LABEL_COLUMN, HEADER_DEPARTMENT_LABEL
+        sheet, HEADER_ROW, department_label_column, HEADER_DEPARTMENT_LABEL
     )
     department_label.font = _BOLD
-    _write_text(sheet, HEADER_ROW, HEADER_DEPARTMENT_VALUE_COLUMN, department_name).font = _NORMAL
+    _write_text(sheet, HEADER_ROW, department_value_column, department_name).font = _NORMAL
     sheet.row_dimensions[HEADER_ROW].height = 20
 
 
@@ -284,7 +324,7 @@ def _write_responsible_row(sheet: Worksheet, doc_type: str, data_row_count: int)
     """在最后一条明细下空一行写 4 个责任栏标签，姓名不填写。"""
     last_data_row = FIRST_DATA_ROW + data_row_count - 1 if data_row_count else COLUMN_TITLE_ROW
     row_no = max(last_data_row, COLUMN_TITLE_ROW) + 2
-    for column_no, label in RESPONSIBLE_LABELS[doc_type]:
+    for column_no, label in EXPORT_RESPONSIBLE_LABELS[doc_type]:
         _write_text(sheet, row_no, column_no, label).font = _NORMAL
 
 
@@ -366,6 +406,20 @@ def _set_data_widths(sheet: Worksheet, doc_type: str, columns: tuple[str, ...]) 
     sheet.print_options.gridLines = True
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.paperSize = 9
+
+
+def _set_export_layout(sheet: Worksheet, doc_type: str, columns: tuple[str, ...]) -> None:
+    """设置导出列宽与横向 A4 打印布局；模板路径不调用本函数。"""
+    widths = _EXPORT_COLUMN_WIDTHS[doc_type]
+    for index, title in enumerate(columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = widths[title]
+    sheet.freeze_panes = "A4"
+    sheet.print_options.gridLines = True
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.paperSize = 9
+    sheet.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 0
 
 
 def _write_help_sheet(

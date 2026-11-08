@@ -1035,7 +1035,7 @@ def test_xlsx_parse_does_not_change_master_data_or_documents(
     assert _counts(session_factory) == before
 
 
-def test_xlsx_parse_export_ignores_responsible_row(
+def test_xlsx_parse_export_ignores_responsible_row_and_unit_value(
     tmp_path: Path,
     session_factory: sessionmaker[Session],
     master_data: MasterDataFixture,
@@ -1052,12 +1052,18 @@ def test_xlsx_parse_export_ignores_responsible_row(
                 level2_name=master_data.category_child.name,
                 material_name=master_data.material.name,
                 quantity="1.250",
+                unit=master_data.material.unit,
                 manufacturer_name=master_data.manufacturer.name,
                 remark="导出后再次解析",
             )
         ],
         info_rows=[("正式单号", "RK20261105-000001")],
     )
+
+    def tamper_unit(workbook) -> None:
+        workbook["录入数据"]["E4"] = "篡改单位"
+
+    data = edit_workbook(data, tamper_unit)
     with session_factory() as session:
         parsed = _parse(tmp_path, "INBOUND", data, session)
 
@@ -1065,6 +1071,90 @@ def test_xlsx_parse_export_ignores_responsible_row(
     assert parsed.total_rows == 1
     assert len(parsed.lines) == 1
     assert parsed.lines[0].remark == "导出后再次解析"
+    assert parsed.lines[0].unit == master_data.material.unit
+
+
+def test_xlsx_parse_outbound_export_ignores_unit_column(
+    tmp_path: Path,
+    session_factory: sessionmaker[Session],
+    master_data: MasterDataFixture,
+) -> None:
+    data = build_document_export(
+        doc_type="OUTBOUND",
+        doc_no="CK20261105-000001",
+        warehouse_name=master_data.warehouse.name,
+        department_name=master_data.department.name,
+        rows=[
+            ExportRow(
+                project_name=None,
+                level1_name=master_data.category.name,
+                level2_name=master_data.category_child.name,
+                material_name=master_data.material.name,
+                quantity="1.000",
+                unit=master_data.material.unit,
+                manufacturer_name=None,
+                remark=None,
+            )
+        ],
+        info_rows=[],
+    )
+    with session_factory() as session:
+        parsed = _parse(tmp_path, "OUTBOUND", data, session)
+
+    assert parsed.status == "SUCCESS"
+    assert len(parsed.lines) == 1
+    assert parsed.lines[0].material_id == master_data.material.id
+    assert parsed.lines[0].unit == master_data.material.unit
+
+
+@pytest.mark.parametrize("doc_type", ["INBOUND", "OUTBOUND"])
+def test_xlsx_parse_accepts_legacy_export_positions(
+    tmp_path: Path,
+    session_factory: sessionmaker[Session],
+    master_data: MasterDataFixture,
+    doc_type: str,
+) -> None:
+    inbound = doc_type == "INBOUND"
+    data = build_document_export(
+        doc_type=doc_type,
+        doc_no="RK20261105-000001" if inbound else "CK20261105-000001",
+        warehouse_name=master_data.warehouse.name,
+        department_name=master_data.department.name,
+        rows=[
+            ExportRow(
+                project_name=None,
+                level1_name=master_data.category.name,
+                level2_name=master_data.category_child.name,
+                material_name=master_data.material.name,
+                quantity="1.000",
+                unit=master_data.material.unit,
+                manufacturer_name=master_data.manufacturer.name if inbound else None,
+                remark=None,
+            )
+        ],
+        info_rows=[],
+    )
+    new_label, new_value = ("G2", "H2") if inbound else ("F2", "G2")
+
+    def move_to_legacy_positions(workbook) -> None:
+        sheet = workbook["录入数据"]
+        label = sheet[new_label].value
+        value = sheet[new_value].value
+        sheet[new_label] = None
+        sheet[new_value] = None
+        sheet["E2"] = label
+        sheet["F2"] = value
+        sheet["F6"] = sheet["G6"].value
+        sheet["G6"] = None
+
+    data = edit_workbook(data, move_to_legacy_positions)
+    with session_factory() as session:
+        parsed = _parse(tmp_path, doc_type, data, session)
+
+    assert parsed.status == "SUCCESS"
+    assert parsed.department_id == master_data.department.id
+    assert len(parsed.lines) == 1
+    assert parsed.lines[0].unit == master_data.material.unit
 
 
 def _counts(session_factory: sessionmaker[Session]) -> dict[str, int]:

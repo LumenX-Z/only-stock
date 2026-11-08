@@ -1,8 +1,8 @@
 """单张单据导出。
 
 依据 docs/07-XLSX模板、快速录入与导出.md 7.8.5：
-- 草稿按当前基础资料名称和分类导出，备注取当前明细行文本；
-- 已生效及已软删除单按历史快照导出，逐行项目名称和备注均取明细快照；
+- 草稿按当前基础资料名称、分类和单位导出，备注取当前明细行文本；
+- 已生效及已软删除单按历史快照导出，逐行项目名称、单位和备注均取明细快照；
 - 导出属于读取操作，不改变单据状态和库存。
 """
 
@@ -112,6 +112,7 @@ def _export_rows(
                 level2_name=level2_name,
                 material_name=material.name if material is not None else line.material_name,
                 quantity=format_quantity_milli(line.quantity_milli),
+                unit=material.unit if material is not None else line.unit,
                 manufacturer_name=(
                     manufacturer.name if manufacturer is not None else line.manufacturer_name
                 ),
@@ -133,6 +134,7 @@ def _snapshot_row(line: StockDocumentLine) -> ExportRow:
         level2_name=line.category_name if line.parent_category_name else None,
         material_name=line.material_name,
         quantity=format_quantity_milli(line.quantity_milli),
+        unit=line.unit,
         manufacturer_name=line.manufacturer_name,
         remark=line.remark,
     )

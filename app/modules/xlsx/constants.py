@@ -6,6 +6,8 @@
 - 入库列含厂家，出库无厂家列，备注均为最后一列；
 - 模板填写区除数量、备注外提供下拉选项，下拉来源写入隐藏的“下拉选项”表；
 - 模板不含责任栏，单张单据导出保留 4 个空姓名责任栏；
+- 单张单据导出在数量列后增加单位列，并单独适配横向 A4 打印；模板不含单位列；
+- 导出的管理部门标签/值：入库 G2/H2、出库 F2/G2；批准人责任栏位于 G 列；
 - 入库/出库模板版本分别为 ``INBOUND_V1`` / ``OUTBOUND_V1``；
 - 上传限制 5 MiB、2,000 非空数据行，并校验解压尺寸与工作簿结构。
 """
@@ -48,6 +50,7 @@ LEVEL1_COLUMN = "一级分类名称"
 LEVEL2_COLUMN = "二级分类名称"
 MATERIAL_COLUMN = "物资名称"
 QUANTITY_COLUMN = "数量"
+UNIT_COLUMN = "单位"
 MANUFACTURER_COLUMN = "厂家名称"
 REMARK_COLUMN = "备注"
 
@@ -74,8 +77,56 @@ COLUMN_TITLES: dict[str, tuple[str, ...]] = {
     DocType.OUTBOUND.value: OUTBOUND_COLUMNS,
 }
 
-# 导出文件保留的责任栏标签及列位置；模板不写责任栏。
-RESPONSIBLE_LABELS: dict[str, tuple[tuple[int, str], ...]] = {
+# 单张单据导出在数量列后增加单位列；模板列仍使用 COLUMN_TITLES。
+EXPORT_INBOUND_COLUMNS: tuple[str, ...] = (
+    LEVEL1_COLUMN,
+    LEVEL2_COLUMN,
+    MATERIAL_COLUMN,
+    QUANTITY_COLUMN,
+    UNIT_COLUMN,
+    MANUFACTURER_COLUMN,
+    PROJECT_COLUMN,
+    REMARK_COLUMN,
+)
+EXPORT_OUTBOUND_COLUMNS: tuple[str, ...] = (
+    LEVEL1_COLUMN,
+    LEVEL2_COLUMN,
+    MATERIAL_COLUMN,
+    QUANTITY_COLUMN,
+    UNIT_COLUMN,
+    PROJECT_COLUMN,
+    REMARK_COLUMN,
+)
+
+EXPORT_COLUMN_TITLES: dict[str, tuple[str, ...]] = {
+    DocType.INBOUND.value: EXPORT_INBOUND_COLUMNS,
+    DocType.OUTBOUND.value: EXPORT_OUTBOUND_COLUMNS,
+}
+
+# 导出文件的表头区管理部门标签/值列：入库 G2/H2，出库 F2/G2。
+EXPORT_HEADER_DEPARTMENT_COLUMNS: dict[str, tuple[int, int]] = {
+    DocType.INBOUND.value: (7, 8),
+    DocType.OUTBOUND.value: (6, 7),
+}
+
+# 导出文件保留的责任栏标签及列位置；模板不写责任栏，批准人位于 G 列。
+EXPORT_RESPONSIBLE_LABELS: dict[str, tuple[tuple[int, str], ...]] = {
+    DocType.INBOUND.value: (
+        (1, "送货人："),
+        (3, "接收人："),
+        (5, "审核人："),
+        (7, "批准人："),
+    ),
+    DocType.OUTBOUND.value: (
+        (1, "领用人："),
+        (3, "出库人："),
+        (5, "审核人："),
+        (7, "批准人："),
+    ),
+}
+
+# 兼容此前导出文件：批准人位于 F 列。
+LEGACY_RESPONSIBLE_LABELS: dict[str, tuple[tuple[int, str], ...]] = {
     DocType.INBOUND.value: (
         (1, "送货人："),
         (3, "接收人："),

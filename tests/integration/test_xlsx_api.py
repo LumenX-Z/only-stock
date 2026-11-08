@@ -21,6 +21,7 @@ from app.modules.documents.service import (
     submit_document,
 )
 from app.modules.masterdata.service import create_entity
+from app.modules.materials.models import Material
 from app.modules.projects.models import Project
 from app.modules.xlsx.constants import SHEET_OPTIONS
 from tests.conftest import MasterDataFixture
@@ -147,15 +148,20 @@ def test_xlsx_export_draft_uses_current_names_and_posted_uses_snapshot(
     client, _identity = logged_in_admin
     record = _create_document(session_factory, master_data)
     current_name = f"当前项目 {uuid4().hex[:8]}"
+    current_unit = f"当前单位{uuid4().hex[:4]}"
     with session_factory() as session:
         project = session.get(Project, master_data.project.id)
         assert project is not None
         project.name = current_name
+        material = session.get(Material, master_data.material.id)
+        assert material is not None
+        material.unit = current_unit
         session.commit()
 
     draft_response = _export(client, record.document.id)
     draft_workbook = load_workbook(BytesIO(draft_response.content))
-    assert draft_workbook["录入数据"]["F4"].value == current_name
+    assert draft_workbook["录入数据"]["E4"].value == current_unit
+    assert draft_workbook["录入数据"]["G4"].value == current_name
     assert _sheet_values(draft_workbook, "单据信息")["涉及项目"] == current_name
 
     submitted = submit_document(
@@ -168,7 +174,8 @@ def test_xlsx_export_draft_uses_current_names_and_posted_uses_snapshot(
     assert submitted.document.status == "POSTED"
     posted_response = _export(client, record.document.id)
     posted_workbook = load_workbook(BytesIO(posted_response.content))
-    assert posted_workbook["录入数据"]["F4"].value == master_data.project.name
+    assert posted_workbook["录入数据"]["E4"].value == master_data.material.unit
+    assert posted_workbook["录入数据"]["G4"].value == master_data.project.name
     assert _sheet_values(posted_workbook, "单据信息")["涉及项目"] == master_data.project.name
 
 

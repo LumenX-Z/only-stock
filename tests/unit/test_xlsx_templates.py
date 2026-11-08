@@ -8,9 +8,12 @@ from io import BytesIO
 
 import pytest
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 from app.modules.xlsx.constants import (
     COLUMN_TITLE_ROW,
+    COLUMN_TITLES,
+    EXPORT_COLUMN_TITLES,
     FIRST_DATA_ROW,
     INBOUND_COLUMNS,
     MAX_DATA_ROW,
@@ -19,6 +22,7 @@ from app.modules.xlsx.constants import (
     SHEET_HELP,
     SHEET_OPTIONS,
     TEMPLATE_VERSIONS,
+    UNIT_COLUMN,
 )
 from app.modules.xlsx.templates import (
     ExportRow,
@@ -45,6 +49,30 @@ def _options() -> TemplateOptions:
 
 def _workbook(doc_type: str, *, with_options: bool = False):
     data = build_template(doc_type, options=_options() if with_options else None)
+    return load_workbook(BytesIO(data))
+
+
+def _export_workbook(doc_type: str):
+    inbound = doc_type == "INBOUND"
+    data = build_document_export(
+        doc_type=doc_type,
+        doc_no="RK20261105-000001" if inbound else "CK20261105-000001",
+        warehouse_name="主仓",
+        department_name="运检",
+        rows=[
+            ExportRow(
+                project_name="一号项目",
+                level1_name="原材料",
+                level2_name="钢材",
+                material_name="螺纹钢",
+                quantity="1.250",
+                unit="千克" if inbound else "根",
+                manufacturer_name="钢厂" if inbound else None,
+                remark="采购批次 A" if inbound else None,
+            )
+        ],
+        info_rows=[],
+    )
     return load_workbook(BytesIO(data))
 
 
@@ -208,6 +236,7 @@ def test_xlsx_export_title_contains_doc_no_and_keeps_responsible_row() -> None:
                 level2_name="钢材",
                 material_name="螺纹钢",
                 quantity="1.250",
+                unit="千克",
                 manufacturer_name="钢厂",
                 remark="采购批次 A",
             )
@@ -218,29 +247,35 @@ def test_xlsx_export_title_contains_doc_no_and_keeps_responsible_row() -> None:
     assert workbook.sheetnames == ["录入数据", "填写说明", "单据信息"]
     sheet = workbook["录入数据"]
     assert sheet["A1"].value == "入库单（RK20261105-000001）"
-    assert [str(item) for item in sheet.merged_cells.ranges] == ["A1:G1"]
+    assert [str(item) for item in sheet.merged_cells.ranges] == ["A1:H1"]
     assert sheet["A2"].value == "仓库名称"
     assert sheet["B2"].value == "主仓"
-    assert sheet["E2"].value == "管理部门名称"
-    assert sheet["F2"].value == "运检"
-    assert [sheet.cell(row=4, column=index).value for index in range(1, 8)] == [
+    assert sheet["G2"].value == "管理部门名称"
+    assert sheet["H2"].value == "运检"
+    assert [sheet.cell(row=COLUMN_TITLE_ROW, column=index).value for index in range(1, 9)] == list(
+        EXPORT_COLUMN_TITLES["INBOUND"]
+    )
+    assert [sheet.cell(row=4, column=index).value for index in range(1, 9)] == [
         "原材料",
         "钢材",
         "螺纹钢",
         "1.250",
+        "千克",
         "钢厂",
         "一号项目",
         "采购批次 A",
     ]
+    assert sheet["E4"].data_type == "s"
     responsible_row = 6
     assert sheet.cell(row=5, column=1).value is None
-    assert [sheet.cell(row=responsible_row, column=index).value for index in (1, 3, 5, 6)] == [
+    assert [sheet.cell(row=responsible_row, column=index).value for index in (1, 3, 5, 7)] == [
         "送货人：",
         "接收人：",
         "审核人：",
         "批准人：",
     ]
-    assert [sheet.cell(row=responsible_row, column=index).value for index in (2, 4)] == [
+    assert [sheet.cell(row=responsible_row, column=index).value for index in (2, 4, 6)] == [
+        None,
         None,
         None,
     ]
@@ -260,6 +295,7 @@ def test_xlsx_export_outbound_responsible_labels() -> None:
                 level2_name=None,
                 material_name="螺纹钢",
                 quantity="2.000",
+                unit="根",
                 manufacturer_name=None,
                 remark=None,
             )
@@ -267,12 +303,56 @@ def test_xlsx_export_outbound_responsible_labels() -> None:
         info_rows=[],
     )
     sheet = load_workbook(BytesIO(data))["录入数据"]
-    assert [sheet.cell(row=6, column=index).value for index in (1, 3, 5, 6)] == [
+    assert [str(item) for item in sheet.merged_cells.ranges] == ["A1:G1"]
+    assert sheet["A2"].value == "仓库名称"
+    assert sheet["B2"].value == "主仓"
+    assert sheet["F2"].value == "管理部门名称"
+    assert sheet["G2"].value == "运检"
+    assert [sheet.cell(row=COLUMN_TITLE_ROW, column=index).value for index in range(1, 8)] == list(
+        EXPORT_COLUMN_TITLES["OUTBOUND"]
+    )
+    assert [sheet.cell(row=4, column=index).value for index in range(1, 8)] == [
+        "原材料",
+        None,
+        "螺纹钢",
+        "2.000",
+        "根",
+        None,
+        None,
+    ]
+    assert [sheet.cell(row=6, column=index).value for index in (1, 3, 5, 7)] == [
         "领用人：",
         "出库人：",
         "审核人：",
         "批准人：",
     ]
+
+
+@pytest.mark.parametrize("doc_type", ["INBOUND", "OUTBOUND"])
+def test_xlsx_template_has_no_unit_column_and_keeps_print_layout(doc_type: str) -> None:
+    sheet = _workbook(doc_type)[SHEET_DATA]
+    titles = [sheet.cell(row=COLUMN_TITLE_ROW, column=index).value for index in range(1, 10)]
+    assert UNIT_COLUMN not in titles
+    assert tuple(title for title in titles if title is not None) == COLUMN_TITLES[doc_type]
+    assert sheet.page_setup.fitToWidth is None
+    assert sheet.page_setup.fitToHeight is None
+    assert sheet.sheet_properties.pageSetUpPr.fitToPage is None
+
+
+@pytest.mark.parametrize("doc_type", ["INBOUND", "OUTBOUND"])
+def test_xlsx_export_fits_landscape_a4(doc_type: str) -> None:
+    sheet = _export_workbook(doc_type)[SHEET_DATA]
+    columns = EXPORT_COLUMN_TITLES[doc_type]
+    total_width = sum(
+        sheet.column_dimensions[get_column_letter(index)].width
+        for index in range(1, len(columns) + 1)
+    )
+    assert total_width <= 120
+    assert sheet.page_setup.orientation == "landscape"
+    assert sheet.page_setup.paperSize == 9
+    assert sheet.sheet_properties.pageSetUpPr.fitToPage is True
+    assert sheet.page_setup.fitToWidth == 1
+    assert sheet.page_setup.fitToHeight == 0
 
 
 def test_xlsx_template_help_contains_requiredness_and_quantity_rules() -> None:

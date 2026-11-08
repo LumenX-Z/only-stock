@@ -5,6 +5,7 @@
 - 行级错误跳过该行，其余有效行返回填单数据；
 - 表头区只解析一次，明细行项目逐行解析，备注逐行独立；
 - 同一物资同一项目重复按行级错误处理，不合并数量；
+- 本系统导出的文件可带数量列后的单位列，解析时接受布局并忽略单位值；
 - 解析不写数据库、不写审计、不保存解析状态。
 """
 
@@ -46,14 +47,17 @@ from app.modules.xlsx.constants import (
     ALLOWED_SHEETS,
     COLUMN_TITLE_ROW,
     COLUMN_TITLES,
+    EXPORT_COLUMN_TITLES,
+    EXPORT_HEADER_DEPARTMENT_COLUMNS,
+    EXPORT_RESPONSIBLE_LABELS,
     FIRST_DATA_ROW,
     HEADER_DEPARTMENT_LABEL,
     HEADER_DEPARTMENT_LABEL_COLUMN,
-    HEADER_DEPARTMENT_VALUE_COLUMN,
     HEADER_ROW,
     HEADER_WAREHOUSE_LABEL,
     HEADER_WAREHOUSE_LABEL_COLUMN,
     HEADER_WAREHOUSE_VALUE_COLUMN,
+    LEGACY_RESPONSIBLE_LABELS,
     LEVEL1_COLUMN,
     LEVEL2_COLUMN,
     MANUFACTURER_COLUMN,
@@ -65,7 +69,6 @@ from app.modules.xlsx.constants import (
     PROJECT_COLUMN,
     QUANTITY_COLUMN,
     REMARK_COLUMN,
-    RESPONSIBLE_LABELS,
     SHEET_DATA,
     SHEET_HELP,
     SUCCESS_NOTICE,
@@ -159,6 +162,12 @@ class _RawRow:
     error: RowIssue | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _SheetLayout:
+    columns: tuple[str, ...]
+    department_label_column: int
+
+
 def parse_document_entry(
     path: str | Path,
     *,
@@ -173,8 +182,6 @@ def parse_document_entry(
             resource="document",
             items=[{"field": "doc_type", "reason": "未知单据类型"}],
         )
-    expected_columns = COLUMN_TITLES[doc_type]
-
     try:
         archive = zipfile.ZipFile(path)
     except (zipfile.BadZipFile, OSError) as exc:
@@ -188,8 +195,9 @@ def parse_document_entry(
                 _validate_sheets(workbook.sheetnames)
                 _validate_template_metadata(workbook, doc_type)
                 data_sheet = _require_worksheet(workbook, SHEET_DATA)
-                _validate_structure(data_sheet, expected_columns, doc_type)
-                responsible_row = _find_responsible_row(data_sheet, doc_type, len(expected_columns))
+                layout = _validate_structure(data_sheet, doc_type)
+                columns = layout.columns
+                responsible_row = _find_responsible_row(data_sheet, doc_type, len(columns))
                 warehouse = _resolve_header_entity(
                     session,
                     _header_value(
@@ -203,7 +211,10 @@ def parse_document_entry(
                 department = _resolve_header_entity(
                     session,
                     _header_value(
-                        data_sheet.cell(row=HEADER_ROW, column=HEADER_DEPARTMENT_VALUE_COLUMN),
+                        data_sheet.cell(
+                            row=HEADER_ROW,
+                            column=layout.department_label_column + 1,
+                        ),
                         HEADER_DEPARTMENT_LABEL,
                     ),
                     Department,
@@ -213,12 +224,12 @@ def parse_document_entry(
                 scan = _scan_sheet(
                     archive,
                     workbook,
-                    expected_columns,
+                    columns,
                     stop_before_row=responsible_row,
                 )
                 raw_rows, total_rows = _read_rows(
                     data_sheet,
-                    expected_columns,
+                    columns,
                     doc_type,
                     scan,
                     stop_before_row=responsible_row,
@@ -355,8 +366,10 @@ def _validate_template_metadata(workbook, doc_type: str) -> None:
         )
 
 
-def _validate_structure(sheet, columns: tuple[str, ...], doc_type: str) -> None:
-    max_column = max(len(columns) + 16, 32)
+def _validate_structure(sheet, doc_type: str) -> _SheetLayout:
+    """校验表头区并返回列布局及管理部门标签列。"""
+    layouts = (COLUMN_TITLES[doc_type], EXPORT_COLUMN_TITLES[doc_type])
+    max_column = max(max(len(layout) for layout in layouts) + 16, 32)
     rows = list(
         sheet.iter_rows(
             min_row=1,
@@ -377,11 +390,24 @@ def _validate_structure(sheet, columns: tuple[str, ...], doc_type: str) -> None:
             "表头区仓库名称标签缺失或位置不符",
             items=[{"field": f"A{HEADER_ROW}", "expected": HEADER_WAREHOUSE_LABEL}],
         )
-    if _cell_text(header_row[HEADER_DEPARTMENT_LABEL_COLUMN - 1]) != HEADER_DEPARTMENT_LABEL:
+
+    department_label_columns = (
+        HEADER_DEPARTMENT_LABEL_COLUMN,
+        EXPORT_HEADER_DEPARTMENT_COLUMNS[doc_type][0],
+    )
+    department_label_column = next(
+        (
+            column
+            for column in department_label_columns
+            if _cell_text(header_row[column - 1]) == HEADER_DEPARTMENT_LABEL
+        ),
+        None,
+    )
+    if department_label_column is None:
         raise file_error(
             "XLSX_HEADER_INVALID",
             "表头区管理部门名称标签缺失或位置不符",
-            items=[{"field": f"E{HEADER_ROW}", "expected": HEADER_DEPARTMENT_LABEL}],
+            items=[{"field": f"第 {HEADER_ROW} 行", "expected": HEADER_DEPARTMENT_LABEL}],
         )
 
     if doc_type == DocType.OUTBOUND.value:
@@ -393,36 +419,66 @@ def _validate_structure(sheet, columns: tuple[str, ...], doc_type: str) -> None:
                 items=[{"field": COLUMN_TITLE_ROW, "column": MANUFACTURER_COLUMN}],
             )
 
-    for index, expected in enumerate(columns):
-        actual = _cell_text(column_title_row[index]) if index < len(column_title_row) else ""
-        if actual != expected:
-            raise file_error(
-                "XLSX_COLUMNS_INVALID",
-                "明细列标题缺失、重复或顺序不符",
-                items=[
-                    {
-                        "field": f"第 {COLUMN_TITLE_ROW} 行第 {index + 1} 列",
-                        "expected": expected,
-                        "actual": actual,
-                    }
-                ],
-            )
+    columns = max(
+        layouts,
+        key=lambda layout: _matching_prefix_length(column_title_row, layout),
+    )
+    mismatch = _layout_mismatch(column_title_row, columns)
+    if mismatch is not None:
+        index, expected, actual = mismatch
+        raise file_error(
+            "XLSX_COLUMNS_INVALID",
+            "明细列标题缺失、重复或顺序不符",
+            items=[
+                {
+                    "field": f"第 {COLUMN_TITLE_ROW} 行第 {index + 1} 列",
+                    "expected": expected,
+                    "actual": actual,
+                }
+            ],
+        )
 
     for index in range(len(columns), max_column):
-        if index < len(column_title_row) and _cell_text(column_title_row[index]):
+        if _cell_text(column_title_row[index]):
             raise file_error(
                 "XLSX_COLUMNS_INVALID",
                 "明细列之后存在多余列标题",
                 items=[{"field": f"第 {COLUMN_TITLE_ROW} 行第 {index + 1} 列"}],
             )
 
+    return _SheetLayout(columns=columns, department_label_column=department_label_column)
+
+
+def _matching_prefix_length(column_title_row: list, layout: tuple[str, ...]) -> int:
+    for index, expected in enumerate(layout):
+        if _cell_text(column_title_row[index]) != expected:
+            return index
+    return len(layout)
+
+
+def _layout_mismatch(
+    column_title_row: list, layout: tuple[str, ...]
+) -> tuple[int, str, str] | None:
+    for index, expected in enumerate(layout):
+        actual = _cell_text(column_title_row[index])
+        if actual != expected:
+            return index, expected, actual
+    return None
+
 
 def _find_responsible_row(sheet, doc_type: str, column_count: int) -> int | None:
     """定位导出文件明细下方的责任栏；模板没有责任栏时返回 ``None``。"""
-    labels = dict(RESPONSIBLE_LABELS[doc_type])
-    required_columns = max(labels)
-    if column_count < required_columns:
+    label_patterns = [
+        labels
+        for labels in (
+            dict(EXPORT_RESPONSIBLE_LABELS[doc_type]),
+            dict(LEGACY_RESPONSIBLE_LABELS[doc_type]),
+        )
+        if column_count >= max(labels)
+    ]
+    if not label_patterns:
         return None
+    required_columns = max(max(labels) for labels in label_patterns)
     max_row = min(sheet.max_row or MAX_SHEET_SCAN_ROW, MAX_SHEET_SCAN_ROW)
     if max_row < FIRST_DATA_ROW:
         return None
@@ -437,9 +493,13 @@ def _find_responsible_row(sheet, doc_type: str, column_count: int) -> int | None
         values = [
             _value_text(row[index]) if index < len(row) else "" for index in range(required_columns)
         ]
-        if all(values[column_no - 1] == label for column_no, label in labels.items()):
+        if any(_labels_match(values, labels) for labels in label_patterns):
             return FIRST_DATA_ROW + offset
     return None
+
+
+def _labels_match(values: list[str], labels: dict[int, str]) -> bool:
+    return all(values[column_no - 1] == label for column_no, label in labels.items())
 
 
 def _scan_sheet(

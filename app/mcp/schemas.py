@@ -1,7 +1,7 @@
 """MCP 工具输入与输出 JSON Schema。
 
 依据 docs/08-MCP服务与工具.md 8.6.2、8.6.3、8.6.5：
-- 12 个工具均声明明确的 JSON Schema，输入不接受任何内部 ID；
+- 13 个工具均声明明确的 JSON Schema，输入不接受任何内部 ID；
 - 输出 schema 只声明文档允许的业务字段，禁止直接复用内部 ORM/API 模型。
 """
 
@@ -208,6 +208,29 @@ DOCUMENT_CREATE_OUTPUT: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+INVENTORY_ITEM_OUTPUT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "warehouse_code": _CODE,
+        "warehouse_name": {"type": "string"},
+        "material_code": _CODE,
+        "material_name": {"type": "string"},
+        "unit": {"type": "string"},
+        "quantity_type": {"type": "string", "enum": ["INTEGER", "DECIMAL"]},
+        "balance": {"type": "string", "description": "不带科学计数法的十进制字符串"},
+    },
+    "required": [
+        "warehouse_code",
+        "warehouse_name",
+        "material_code",
+        "material_name",
+        "unit",
+        "quantity_type",
+        "balance",
+    ],
+    "additionalProperties": False,
+}
+
 
 def list_or_single_output(
     item_schema: dict[str, Any], single_schema: dict[str, Any] | None = None
@@ -247,6 +270,9 @@ def list_output(item_schema: dict[str, Any]) -> dict[str, Any]:
 
 def _code_filter(description: str) -> dict[str, Any]:
     return {"type": "string", "description": description}
+
+
+INVENTORY_LIST_OUTPUT: dict[str, Any] = list_output(INVENTORY_ITEM_OUTPUT)
 
 
 WAREHOUSE_LIST_INPUT: dict[str, Any] = {
@@ -329,6 +355,21 @@ DOCUMENT_LIST_INPUT: dict[str, Any] = {
         "deleted": {
             "type": "boolean",
             "description": "true 只返回已软删除单据，false 只返回未删除单据，省略返回全部",
+        },
+        **_PAGE_PROPERTIES,
+    },
+    "additionalProperties": False,
+}
+
+INVENTORY_LIST_INPUT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "warehouse_code": _code_filter("按仓库编码精确筛选；省略时返回全部仓库"),
+        "material_code": _code_filter("按物资编码精确筛选；省略时返回全部物资"),
+        "include_zero": {
+            "type": "boolean",
+            "default": False,
+            "description": "为 true 时补齐零余额的仓库与物资组合",
         },
         **_PAGE_PROPERTIES,
     },

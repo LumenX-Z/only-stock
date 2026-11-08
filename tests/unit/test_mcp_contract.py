@@ -1,6 +1,6 @@
 """MCP 工具契约、错误结构与输出脱敏单元测试。
 
-依据 docs/08-MCP服务与工具.md 8.6.2、8.6.3、8.6.5 与 docs/16-验收标准.md ACC-MCP-013。
+依据 docs/08-MCP服务与工具.md 8.6.2、8.6.3、8.6.5 与 docs/16-验收标准.md ACC-MCP-013、ACC-MCP-014。
 """
 
 import json
@@ -23,6 +23,7 @@ CA_TOOLS = {
     "material_list",
     "material_create",
     "document_list",
+    "inventory_list",
     "document_create",
 }
 OP_TOOLS = CA_TOOLS - {
@@ -34,7 +35,7 @@ OP_TOOLS = CA_TOOLS - {
 }
 
 
-def test_tool_catalog_has_exactly_twelve_tools() -> None:
+def test_tool_catalog_has_exactly_thirteen_tools() -> None:
     assert set(tools.TOOL_BY_NAME) == CA_TOOLS
     assert {tool.name for tool in tools.visible_definitions("COMPANY_ADMIN")} == CA_TOOLS
     assert {tool.name for tool in tools.visible_definitions("OPERATOR")} == OP_TOOLS
@@ -51,6 +52,32 @@ def test_tool_schemas_only_declare_business_fields() -> None:
                 assert name != "id"
                 assert name != "request_id"
                 assert not name.endswith("_id")
+
+
+def test_inventory_tool_contract() -> None:
+    definition = tools.TOOL_BY_NAME["inventory_list"]
+
+    assert set(definition.input_schema["properties"]) == {
+        "warehouse_code",
+        "material_code",
+        "include_zero",
+        "page",
+        "page_size",
+    }
+    assert set(definition.output_schema["properties"]) == {"items", "page", "page_size", "total"}
+    item = definition.output_schema["properties"]["items"]["items"]
+    assert set(item["properties"]) == {
+        "warehouse_code",
+        "warehouse_name",
+        "material_code",
+        "material_name",
+        "unit",
+        "quantity_type",
+        "balance",
+    }
+    assert definition.roles == tools.ALL_ROLES
+    assert definition.read_only is True
+    assert definition.destructive is False
 
 
 def test_document_create_description_documents_dedup() -> None:

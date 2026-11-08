@@ -44,9 +44,9 @@ MCP_MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 MCP_MAX_SESSIONS = 100
 MCP_SESSION_IDLE_TIMEOUT = 30 * 60
 MCP_INSTRUCTIONS = (
-    "only-stock 库存管理 MCP。使用业务编码 code 与单号 doc_no 定位记录；"
-    "输入输出不含内部 ID。查询工具对所有启用用户开放，基础资料新增工具仅公司管理员可用，"
-    "document_create 对所有启用用户开放。"
+    "only-stock 库存管理 MCP。支持基础资料、单据与实时库存查询，使用业务编码 code 与单号 "
+    "doc_no 定位记录；输入输出不含内部 ID。查询工具对所有启用用户开放，基础资料新增工具仅"
+    "公司管理员可用，document_create 对所有启用用户开放。"
 )
 
 

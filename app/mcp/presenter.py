@@ -12,6 +12,7 @@ from datetime import datetime
 from app.modules.categories.models import Category
 from app.modules.documents.models import StockDocument, StockDocumentLine
 from app.modules.inventory.quantity import format_quantity_milli
+from app.modules.inventory.service import InventoryRow
 from app.modules.materials.models import Material
 
 
@@ -69,6 +70,19 @@ def material_payload(
         "is_active": bool(material.is_active),
         "created_at": isoformat(material.created_at),
         "updated_at": isoformat(material.updated_at),
+    }
+
+
+def inventory_payload(row: InventoryRow) -> dict[str, object]:
+    """库存列表项只输出仓库、物资与可用量，不含内部 ID。"""
+    return {
+        "warehouse_code": row.warehouse_code,
+        "warehouse_name": row.warehouse_name,
+        "material_code": row.material_code,
+        "material_name": row.material_name,
+        "unit": row.unit,
+        "quantity_type": row.quantity_type,
+        "balance": format_quantity_milli(row.balance_milli),
     }
 
 

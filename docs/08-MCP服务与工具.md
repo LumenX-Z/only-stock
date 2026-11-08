@@ -33,7 +33,7 @@
 - MCP 地址为 `/mcp`，使用标准 Streamable HTTP，不支持旧版 HTTP+SSE，不建立独立端口或进程。实现使用官方 MCP Python SDK，并锁定协议兼容版本。
 - 所有 MCP 请求使用 `Authorization: Bearer <api_key>`。未提供、格式错误、哈希不存在、Key 已吊销或用户已禁用时，按协议返回 HTTP 401；普通 Cookie 不能代替 Key。
 - MCP 初始化、能力协商、`tools/list`、`tools/call`、通知和会话终止遵循 SDK 与协议规范；`MCP-Session-Id` 只是协议传输会话，不是系统登录会话，不能代替 API Key。所有请求均重新鉴权。
-- 工具提供明确的中文描述、JSON Schema 输入和输出 schema、`readOnlyHint`/`destructiveHint` 等准确注解；新增工具的 `readOnlyHint=false`，直接提交工具不得标为只读。结果使用 MCP `structuredContent`，可附 JSON 文本作为兼容展示，不得仅返回自然语言。
+- 工具提供明确的中文描述、JSON Schema 输入和输出 schema、`readOnlyHint`/`destructiveHint` 等准确注解；查询工具的 `readOnlyHint=true`，新增与提交工具的 `readOnlyHint=false`，全部工具的 `destructiveHint=false`，直接提交工具不得标为只读。结果使用 MCP `structuredContent`，可附 JSON 文本作为兼容展示，不得仅返回自然语言。
 - HTTP 状态只表达传输、认证、限流等协议层结果；已进入 `tools/call` 后的参数、权限或业务失败使用 MCP 工具错误 `isError=true`，其 `structuredContent.error` 包含 `code`、`message`、`request_id`、`details`。沿用现有错误码；未知/无权限工具分别使用 `TOOL_NOT_FOUND`、`FORBIDDEN`，不得向无权限者泄露工具实现细节。
 - 定位与输出只使用业务标识：基础资料 `code`、单据 `doc_no`；工具输入一律不接受 `id`、`*_id`、内部 UUID 或 `request_id`（传入按参数校验错误拒绝），任何成功结果、列表项、详情及错误 `details` 都不包含 `id`、`*_id` 或内部 UUID。逐次请求的 `request_id` 由服务端生成，只用于错误、日志和审计关联，不作为任何工具的业务参数、定位依据或成功结果字段，规则见 8.6.5。
 
@@ -52,15 +52,18 @@
 | `material_list`       | 查看物资               | 是 | 是 | `code`（单条）或分页/`name`/`category_code` 筛选                        |
 | `material_create`     | 新增物资               | 是 | 否 | `category_code`, `name`, `unit`, `quantity_type`；`code` 由系统自动生成 |
 | `document_list`       | 查看入库/出库单        | 是 | 是 | `doc_no`（单条）或分页及单据筛选                                        |
+| `inventory_list`      | 查看实时库存           | 是 | 是 | `warehouse_code`/`material_code` 筛选、`include_zero`、分页             |
 | `document_create`     | 新增草稿或原子直接提交 | 是 | 是 | 见下表                                                                  |
 
-`tools/list` 每次按当前账号权限生成，不返回无权限工具：OP 恰为六个 `*_list` 与 `document_create` 共 7 个，CA 为全部 12 个。`tools/call` 不能信任此前清单，必须再次执行相同权限判断；Key 的角色不固化。角色变化因 Key 全部撤销而需重建，新 Key 才能获得变化后的工具清单。
+`tools/list` 每次按当前账号权限生成，不返回无权限工具：OP 恰为七个 `*_list` 与 `document_create` 共 8 个，CA 为全部 13 个。`tools/call` 不能信任此前清单，必须再次执行相同权限判断；Key 的角色不固化。角色变化因 Key 全部撤销而需重建，新 Key 才能获得变化后的工具清单。
 
 ### 8.6.3 查询与新增参数契约
 
-五类基础资料 `list` 与 `document_list` 共用分页参数 `page`、`page_size`（默认 `1`/`20`，最大 `100`）；五类基础资料另有 `include_inactive`，`document_list` 另有软删除筛选。单条记录以业务标识定位：`warehouse_list`、`department_list`、`manufacturer_list`、`category_list`、`material_list` 使用 `code`，`document_list` 使用 `doc_no`。传定位参数时忽略分页与其他筛选（五类基础资料同时忽略 `include_inactive`），精确返回单个完整对象（基础资料含停用记录，单据含软删除记录）；不存在返回 `RESOURCE_NOT_FOUND`。不传定位参数时返回 `items/page/page_size/total`；五类基础资料默认只列启用记录，`include_inactive=true` 时包含停用记录。分类返回自身 `code` 及父分类引用 `parent_code`，物资返回自身 `code`、直接分类及其父级信息。
+五类基础资料 `list`、`document_list` 与 `inventory_list` 共用分页参数 `page`、`page_size`（默认 `1`/`20`，最大 `100`）；五类基础资料另有 `include_inactive`，`document_list` 另有软删除筛选。单条记录以业务标识定位：`warehouse_list`、`department_list`、`manufacturer_list`、`category_list`、`material_list` 使用 `code`，`document_list` 使用 `doc_no`。传定位参数时忽略分页与其他筛选（五类基础资料同时忽略 `include_inactive`），精确返回单个完整对象（基础资料含停用记录，单据含软删除记录）；不存在返回 `RESOURCE_NOT_FOUND`。不传定位参数时返回 `items/page/page_size/total`；五类基础资料默认只列启用记录，`include_inactive=true` 时包含停用记录。分类返回自身 `code` 及父分类引用 `parent_code`，物资返回自身 `code`、直接分类及其父级信息。
 
 各 `list` 的筛选字段为：仓库 `name`；部门 `name`；厂家 `name`；分类 `name/parent_code`；物资 `name/category_code`；单据 `doc_type/status/warehouse_code/department_code/project_code/manufacturer_code/start_date/end_date/deleted`。单据的 `project_code` 与 `manufacturer_code` 均按明细行筛选，任一行匹配即命中；`manufacturer_code` 只匹配入库明细，出库明细没有厂家。`document_list` 摘要中的项目以去重列表返回。带资源前缀的编码参数均为对目标实体 `code` 的关联引用；`parent_code`、`category_code` 只是引用参数名，不是目标表字段。关联筛选编码不存在时返回空列表。五类基础资料的列表项与按 `code` 查询返回相同业务字段；单据摘要列表返回常用字段，按 `doc_no` 查询时返回单据头、全部明细和历史快照，已软删除单保留状态与明细。所有数量仍为十进制字符串；输出只含业务编码与名称，不含 `id`、`*_id` 或内部 UUID。
+
+`inventory_list` 与 `GET /inventory` 共用同一库存服务与口径：只统计已生效且未软删除的单据，按“仓库 + 物资”汇总，不按项目、部门或厂家分账；零余额组合默认不返回，`include_zero=true` 时以 `"0.000"` 补齐。`warehouse_code` 与 `material_code` 分别精确筛选仓库和物资，可单独或组合使用；编码不存在时返回空列表。停用资料不改变库存口径，带余额记录仍可查询。查询始终返回分页列表，不提供单条对象模式；不开放排序参数。
 
 基础资料新增工具不接收自身的 `code`、`id`、`*_id`、`is_active`、审计字段或客户端指定的显示名快照；`document_create` 的编码类输入只接受关联 `*_code`，不接收 `doc_no`/`id`。传入 `id`/`*_id`/UUID、`request_id` 或基础资料创建工具的 `code` 时按参数校验错误拒绝，不得静默忽略。五类基础资料创建后均为启用状态，复用普通 API 的服务端编码生成与唯一约束、名称唯一、分类层级、上级启用和物资数量类型规则。`category_create` 无 `parent_code` 为一级，有则为二级；`material_create` 的 `category_code` 可指向一级或二级分类。新增成功返回含系统生成 `code` 的完整对象，`document_create` 返回含系统生成 `doc_no` 的完整单据，均不含内部 ID；失败不自动改名、复用同名资料或创建关联资料。
 
@@ -103,6 +106,35 @@
 
 示例不含 `request_id`：该值由服务端为每次 `tools/call` 生成，只出现在错误对象的 `error.request_id` 中用于审计与日志关联，成功结果不回显。MCP 建单的业务去重按创建者、规范化指纹和 300 秒窗口判定，命中时结果中 `deduplicated=true` 并返回原单的 `doc_no`。
 
+库存查询示例：
+
+```json
+{
+  "warehouse_code": "CK-00001",
+  "material_code": "WZ-00001",
+  "include_zero": true
+}
+```
+
+```json
+{
+  "items": [
+    {
+      "warehouse_code": "CK-00001",
+      "warehouse_name": "一号库",
+      "material_code": "WZ-00001",
+      "material_name": "示例物资",
+      "unit": "千克",
+      "quantity_type": "DECIMAL",
+      "balance": "1.250"
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+
 客户端连接配置指向 `http://服务器IP:8000/mcp`，完整 Key 仅配置在受控 MCP 客户端的 Authorization/Bearer 凭证中，不放入 URL、工具参数或提示词。部署页面应给出 MCP 地址和配置示例，但不得显示任何真实 Key。
 
 ### 8.6.5 输出字段
@@ -132,7 +164,10 @@
 | ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `document_list`（摘要列表）   | 无（分页/筛选）         | `doc_no`, `doc_type`, `status`, `warehouse_code`, `warehouse_name`, `department_code`, `department_name`, `projects`, `created_by_name`, `created_at`, `deleted` |
 | `document_list`（按单号查询） | `doc_no`                | 摘要字段另加 `submitted_at`, `submitted_by_name`, `deleted_at`, `lines`                                                                                                    |
+| `inventory_list`              | 无（分页/筛选）         | `warehouse_code`, `warehouse_name`, `material_code`, `material_name`, `unit`, `quantity_type`, `balance`                                                                   |
 | `document_create`             | 无（系统生成 `doc_no`） | 与按单号查询的详情相同，另加 `deduplicated`（布尔；仅此工具输出）                                                                                                                    |
+
+`inventory_list` 始终返回 `items/page/page_size/total` 列表结构，不返回单条对象；`balance` 为不带科学计数法的十进制字符串。
 
 `projects` 为去重后的项目列表，元素为 `{project_code, project_name}`；没有项目行时为空数组。`lines[]` 的字段为 `line_no`、`material_code`、`material_name`、`unit`、`quantity_type`、`category_name`、`parent_category_name`、`manufacturer_code`、`manufacturer_name`、`project_code`、`project_name`、`quantity`、`remark`；入库单的厂家字段必填，出库单为 `null`；项目字段可空，`project_name` 为明细快照；`remark` 为逐行备注，可空。
 

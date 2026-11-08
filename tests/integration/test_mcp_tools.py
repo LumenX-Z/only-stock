@@ -1,7 +1,7 @@
 """MCP 工具清单、查询、新增与参数边界测试。
 
 依据 docs/08-MCP服务与工具.md 8.6.2–8.6.5、docs/15-测试方案.md 12.1 与
-docs/16-验收标准.md ACC-MCP-004–ACC-MCP-008、ACC-MCP-013。
+docs/16-验收标准.md ACC-MCP-004–ACC-MCP-008、ACC-MCP-013、ACC-MCP-014。
 """
 
 from uuid import uuid4
@@ -37,6 +37,7 @@ CA_TOOLS = [
     "material_list",
     "material_create",
     "document_list",
+    "inventory_list",
     "document_create",
 ]
 OP_TOOLS = [
@@ -46,6 +47,7 @@ OP_TOOLS = [
     "category_list",
     "material_list",
     "document_list",
+    "inventory_list",
     "document_create",
 ]
 
@@ -66,6 +68,7 @@ _MINIMAL_ARGUMENTS: dict[str, dict[str, object]] = {
         "quantity_type": "DECIMAL",
     },
     "document_list": {},
+    "inventory_list": {},
     "document_create": {
         "doc_type": "INBOUND",
         "warehouse_code": "CK-00001",
@@ -182,6 +185,11 @@ async def test_uuid_as_business_code_is_rejected(app: FastAPI, mcp_accounts: MCP
         result = await call_tool(sessions["ca"], "document_list", {"doc_no": str(uuid4())})
         error = tool_error(result)
         assert error["code"] == "VALIDATION_ERROR"
+
+        for field in ("warehouse_code", "material_code"):
+            result = await call_tool(sessions["ca"], "inventory_list", {field: str(uuid4())})
+            error = tool_error(result)
+            assert error["code"] == "VALIDATION_ERROR"
 
 
 async def test_base_data_create_returns_generated_code_and_hides_ids(
@@ -405,6 +413,195 @@ async def test_document_list_and_detail(
 
         missing = await call_tool(sessions["ca"], "document_list", {"doc_no": "RK20260101-999999"})
         assert tool_error(missing)["code"] == "RESOURCE_NOT_FOUND"
+
+
+async def test_inventory_list_reflects_stock_filters_and_zero_fill(
+    app: FastAPI,
+    mcp_accounts: MCPAccounts,
+    master_data: MasterDataFixture,
+    session_factory: sessionmaker[Session],
+) -> None:
+    async with mcp_sessions(
+        app, {"ca": mcp_accounts.ca_key, "op": mcp_accounts.op_key}
+    ) as sessions:
+        empty = structured(await call_tool(sessions["ca"], "inventory_list", {}))
+        assert empty == {"items": [], "page": 1, "page_size": 20, "total": 0}
+
+        zero_filled = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"include_zero": True, "page_size": 100},
+            )
+        )
+        assert zero_filled["total"] == 6
+        assert {item["balance"] for item in zero_filled["items"]} == {"0.000"}
+        assert_no_internal_ids(zero_filled)
+
+        created = structured(
+            await call_tool(
+                sessions["ca"],
+                "document_create",
+                {
+                    "doc_type": "INBOUND",
+                    "submit": True,
+                    "warehouse_code": master_data.warehouse.code,
+                    "department_code": master_data.department.code,
+                    "lines": [
+                        {
+                            "material_code": master_data.material.code,
+                            "quantity": "1.250",
+                            "manufacturer_code": master_data.manufacturer.code,
+                        }
+                    ],
+                },
+            )
+        )
+        assert created["status"] == "POSTED"
+
+        stock = structured(await call_tool(sessions["ca"], "inventory_list", {}))
+        assert stock["total"] == 1
+        assert stock["items"][0] == {
+            "warehouse_code": master_data.warehouse.code,
+            "warehouse_name": master_data.warehouse.name,
+            "material_code": master_data.material.code,
+            "material_name": master_data.material.name,
+            "unit": master_data.material.unit,
+            "quantity_type": "DECIMAL",
+            "balance": "1.250",
+        }
+        assert_no_internal_ids(stock)
+
+        filtered = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {
+                    "warehouse_code": master_data.warehouse.code,
+                    "material_code": master_data.material.code,
+                },
+            )
+        )
+        assert filtered["total"] == 1
+        assert filtered["items"][0]["balance"] == "1.250"
+
+        by_warehouse = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"warehouse_code": master_data.warehouse.code},
+            )
+        )
+        assert by_warehouse["total"] == 1
+        by_material = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"material_code": master_data.material.code},
+            )
+        )
+        assert by_material["total"] == 1
+
+        zero_pair = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {
+                    "warehouse_code": master_data.warehouse_second.code,
+                    "material_code": master_data.material.code,
+                },
+            )
+        )
+        assert zero_pair == {"items": [], "page": 1, "page_size": 20, "total": 0}
+        zero_pair_filled = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {
+                    "warehouse_code": master_data.warehouse_second.code,
+                    "material_code": master_data.material.code,
+                    "include_zero": True,
+                },
+            )
+        )
+        assert zero_pair_filled["total"] == 1
+        assert zero_pair_filled["items"][0]["balance"] == "0.000"
+
+        unknown = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"warehouse_code": "CK-99999", "material_code": "WZ-99999"},
+            )
+        )
+        assert unknown == {"items": [], "page": 1, "page_size": 20, "total": 0}
+
+        outbound = structured(
+            await call_tool(
+                sessions["ca"],
+                "document_create",
+                {
+                    "doc_type": "OUTBOUND",
+                    "submit": True,
+                    "warehouse_code": master_data.warehouse.code,
+                    "department_code": master_data.department.code,
+                    "lines": [
+                        {
+                            "material_code": master_data.material.code,
+                            "quantity": "0.250",
+                        }
+                    ],
+                },
+            )
+        )
+        assert outbound["status"] == "POSTED"
+        after_outbound = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"material_code": master_data.material.code},
+            )
+        )
+        assert after_outbound["items"][0]["balance"] == "1.000"
+
+        paged = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"include_zero": True, "page": 2, "page_size": 2},
+            )
+        )
+        assert paged["page"] == 2
+        assert paged["page_size"] == 2
+        assert len(paged["items"]) == 2
+        assert paged["total"] == 6
+
+        op_stock = structured(
+            await call_tool(
+                sessions["op"],
+                "inventory_list",
+                {"material_code": master_data.material.code},
+            )
+        )
+        assert op_stock["items"][0]["balance"] == "1.000"
+
+        set_entity_active(
+            session_factory,
+            "material",
+            master_data.material.id,
+            active=False,
+            actor_user_id=master_data.actor.id,
+            request_id=None,
+        )
+        inactive_stock = structured(
+            await call_tool(
+                sessions["ca"],
+                "inventory_list",
+                {"material_code": master_data.material.code},
+            )
+        )
+        assert inactive_stock["total"] == 1
+        assert inactive_stock["items"][0]["balance"] == "1.000"
 
 
 async def test_document_create_parameter_rules(

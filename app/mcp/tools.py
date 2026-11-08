@@ -1,9 +1,10 @@
 """MCP 工具声明、动态权限过滤与调用分发。
 
 依据 docs/08-MCP服务与工具.md 8.6.2、8.6.3、8.6.5 与 docs/04-认证、会话与凭证安全.md 5.5：
-- 12 个工具：六类资源各 ``list/create``；``tools/list`` 每次按当前账号过滤，
-  ``tools/call`` 不信任先前清单并按数据库当前角色、账户与 Key 状态重新校验；
-- OP 恰为六个 ``list`` 与 ``document_create``；CA 为全部 12 个；
+- 13 个工具：六类资源各 ``list/create``，另有 ``inventory_list`` 实时库存查询；
+  ``tools/list`` 每次按当前账号过滤，``tools/call`` 不信任先前清单并按数据库当前
+  角色、账户与 Key 状态重新校验；
+- OP 恰为七个 ``list`` 与 ``document_create``；CA 为全部 13 个；
 - 查询工具不写业务审计；新增工具复用普通服务层并标记 ``source=MCP`` 与 Key 标识。
 """
 
@@ -32,7 +33,7 @@ from app.modules.documents.service import (
     get_document,
     list_documents,
 )
-from app.modules.inventory.service import local_day_bounds
+from app.modules.inventory.service import list_inventory, local_day_bounds
 from app.modules.manufacturers.models import Manufacturer
 from app.modules.masterdata.base import NAME_MAX_LENGTH, UNIT_MAX_LENGTH
 from app.modules.masterdata.service import (
@@ -333,6 +334,40 @@ def _document_list(inv: Invocation, arguments: object) -> dict[str, Any]:
         return _list_payload(items, page, page_size, total)
 
 
+def _inventory_list(inv: Invocation, arguments: object) -> dict[str, Any]:
+    args = validation.require_object(arguments)
+    validation.reject_unknown(
+        args, {"warehouse_code", "material_code", "include_zero", "page", "page_size"}
+    )
+    warehouse_code = validation.optional_code(args, "warehouse_code")
+    material_code = validation.optional_code(args, "material_code")
+    include_zero = validation.optional_bool(args, "include_zero")
+    page, page_size = validation.page_parameters(args)
+
+    with inv.session_factory() as session:
+        warehouse_id = None
+        if warehouse_code is not None:
+            warehouse_id = references.id_for_code(session, Warehouse, warehouse_code)
+            if warehouse_id is None:
+                return _list_payload([], page, page_size, 0)
+        material_id = None
+        if material_code is not None:
+            material_id = references.id_for_code(session, Material, material_code)
+            if material_id is None:
+                return _list_payload([], page, page_size, 0)
+        rows, total = list_inventory(
+            session,
+            warehouse_id=warehouse_id,
+            material_id=material_id,
+            include_zero=include_zero,
+            page=page,
+            page_size=page_size,
+        )
+        return _list_payload(
+            [presenter.inventory_payload(row) for row in rows], page, page_size, total
+        )
+
+
 # --------------------------------------------------------------------------- 新增工具
 
 
@@ -621,6 +656,21 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         read_only=True,
         destructive=False,
         handler=_document_list,
+    ),
+    ToolDefinition(
+        name="inventory_list",
+        description=(
+            "查询实时库存。库存按“仓库 + 物资”汇总，只统计已生效且未软删除的单据，草稿和已软删除"
+            "单不计入，不按项目、部门或厂家分账。可按 warehouse_code、material_code 精确筛选；"
+            "include_zero=true 时补齐零余额组合并输出 0.000。未知编码返回空列表。余额为不带科学"
+            "计数法的十进制字符串；输出只含业务编码与名称，不含内部 ID。"
+        ),
+        input_schema=schemas.INVENTORY_LIST_INPUT,
+        output_schema=schemas.INVENTORY_LIST_OUTPUT,
+        roles=ALL_ROLES,
+        read_only=True,
+        destructive=False,
+        handler=_inventory_list,
     ),
     ToolDefinition(
         name="document_create",

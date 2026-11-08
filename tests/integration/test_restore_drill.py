@@ -117,7 +117,8 @@ async def test_restore_drill_keeps_login_inventory_documents_and_mcp(
     async with mcp_sessions(mcp_app, {"ca": raw_key}) as sessions:
         tools = await sessions["ca"].list_tools()
         names = tool_names(tools.tools)
-        assert len(names) == 12
+        assert len(names) == 13
+        assert "inventory_list" in names
         listed = await sessions["ca"].call_tool("document_list", {"page_size": 10})
         assert listed.is_error is False
         assert listed.structured_content is not None
